@@ -1,3 +1,6 @@
 node_modules/
 .wrangler/
 .dev.vars
+# Added by Braintrust Wizard
+.env.braintrust
+.braintrust.json
