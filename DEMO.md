@@ -50,10 +50,18 @@ Single-tier top 10, guardrail blocks, neutral ranking served, audit event raised
 ```bash
 curl -s localhost:8102/invoke -H 'content-type: application/json' \
   -d '{"agent":"discovery","tool":"loyalty.accrue","args":{"customer_id":"C001","base_points":999}}'
-cp registry/available/catalogue.trending.get.json registry/tools/
-curl -X POST localhost:8002/registry/reload
+curl -X POST localhost:8102/registry/install -H 'content-type: application/json' -d '{
+  "name":"catalogue.trending.get","version":"1.0.0",
+  "purpose":"Trending SKUs in a category, derived from order volume.",
+  "allowed_agents":["discovery"],
+  "input_schema":{"category":{"type":"string","required":true},"days":{"type":"integer","required":false,"default":30}},
+  "output_schema":{"category":"string","trending":"array"},
+  "transport":{"service":"services","method":"GET","path":"/catalogue/trending/{category}"}}'
 ```
-Denied by contract; registry goes from 19 tools to 20 with no agent code touched.
+Denied by contract; registry goes from 19 tools to 20 with no agent code touched. (The
+contract being installed lives at `packages/tools/registry/available/catalogue.trending.get.json`
+if you want to show the file rather than type the JSON inline. Reset with
+`curl -X POST localhost:8102/registry/reset` afterwards.)
 
 **9 · Model interoperability (30s)** — `curl localhost:8103/routing`, then change
 `LLM_PROVIDER` in `packages/llm/wrangler.jsonc` and repeat beat 1. Same orchestrator,
