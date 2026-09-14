@@ -183,6 +183,48 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
 });
 
 renderPersonas();
+
+const CATEGORY_PILLS = ['occasion dress','coat','jumper','trousers','trainers'];
+const CAT_ICON = { dresses:'👗', outerwear:'🧥', knitwear:'🧶', trousers:'👖', tops:'👕', skirts:'👗', footwear:'👟', accessories:'👜' };
+const CAT_COLOR = { dresses:'#F3E8FF', outerwear:'#E6F3F2', knitwear:'#FBEFE9', trousers:'#EAF0FB', tops:'#F4F6FB', skirts:'#FDF2E9', footwear:'#EFEFEF', accessories:'#F7EAF0' };
+let lastProducts = [];
+
+$('pills').innerHTML = CATEGORY_PILLS.map(c => `<button class="pill">${esc(c)}</button>`).join('');
+document.querySelectorAll('.pill').forEach(p => p.onclick = () => { $('search').value = 'show me a ' + p.textContent; runSearch(); });
+$('searchBtn').onclick = runSearch;
+$('search').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
+
+async function runSearch(){
+  const text = $('search').value.trim();
+  if (!text) return;
+  $('grid').innerHTML = '<p class="empty">Searching…</p>';
+  $('blurb').innerHTML = '';
+  const d = await ask(text);
+  if (d.error) { $('grid').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
+  if (d.intent !== 'discovery.rank' || !d.payload?.products) {
+    $('grid').innerHTML = `<p class="empty">${esc(d.reply || 'No results for that.')}</p>`;
+    return;
+  }
+  lastProducts = d.payload.products;
+  const mix = Object.entries(d.payload.price_tier_mix || {}).map(([t,n]) => `${n} ${t}`).join(', ');
+  $('blurb').innerHTML = `<div class="blurb"><b>Because of your shopping history</b> — ${esc(d.payload.rationale)}
+    <div class="why" id="whyToggle">Why am I seeing this? ▾</div>
+    <div class="why-body" id="whyBody">Ranked ${d.payload.candidates} eligible products for you; the top 5 mix is ${esc(mix)}.</div>
+  </div>`;
+  $('whyToggle').onclick = () => $('whyBody').classList.toggle('open');
+  if (!lastProducts.length) { $('grid').innerHTML = '<p class="empty">No stocked products matched that search.</p>'; return; }
+  $('grid').innerHTML = lastProducts.map((p,i) => `
+    <button class="card" data-i="${i}">
+      <div class="ph" style="background:${CAT_COLOR[p.category] || '#F4F6FB'}">${CAT_ICON[p.category] || '🛍️'}</div>
+      <div class="body">
+        <div class="brand">${esc(p.brand)}</div>
+        <div class="title">${esc(p.title)}</div>
+        <div class="price">£${p.price_gbp}</div>
+        <div class="meta">★ ${p.rating} · ${p.stock > 8 ? 'In stock' : p.stock > 0 ? 'Low stock' : 'Out of stock'}</div>
+      </div>
+    </button>`).join('');
+  document.querySelectorAll('#grid .card').forEach(c => c.onclick = () => openProduct(lastProducts[+c.dataset.i]));
+}
 </script>
 </body>
 </html>
