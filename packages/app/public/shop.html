@@ -161,6 +161,7 @@ function resetPersonaState(){
   $('loyaltyBody').innerHTML = '<p class="empty">Simulate a purchase to see your balance and tier progress.</p>';
   $('redeemResult').innerHTML = '';
   $('overlay').classList.remove('open');
+  if (currentView === 'account') loadAccount();
 }
 
 function renderPersonas(){
@@ -265,6 +266,60 @@ function openProduct(p){
     $('whyFit').onclick = () => $('whyFitBody').classList.toggle('open');
   };
 }
+
+async function loadAccount(){
+  $('profileBody').innerHTML = '<p class="empty">Loading your profile…</p>';
+  $('subBody').innerHTML = '<p class="empty">Loading…</p>';
+
+  const p = await ask('who am I');
+  if (p.error) { $('profileBody').innerHTML = `<p class="empty">${esc(p.reply)}</p>`; }
+  else {
+    const seg = p.payload?.segment;
+    if (seg) {
+      $('profileBody').innerHTML = `<div>${esc(String(seg.affluence).replace('_',' '))} · ${esc(seg.loyalty_status)}
+        <div class="meta">Tier ${esc(seg.tier)} · ${seg.evidence.orders} orders · ${seg.evidence.tenure_days} days as a customer</div></div>`;
+      $('tierBadge').textContent = `${seg.tier} tier`;
+    } else {
+      $('profileBody').innerHTML = `<p class="empty">${esc(p.reply || 'Could not load profile.')}</p>`;
+    }
+  }
+
+  const u = await ask('tell me about the styling advisory plan');
+  if (u.error) { $('subBody').innerHTML = `<p class="empty">${esc(u.reply)}</p>`; return; }
+  if (u.payload?.offer) {
+    $('subBody').innerHTML = `<p>${esc(u.payload.offer.copy)}</p>
+      <button class="btn primary" id="acceptOffer">Accept · £${u.payload.offer.price_gbp_month}/mo</button>`;
+    $('acceptOffer').onclick = async () => {
+      const a = await ask('accept');
+      $('subBody').innerHTML = `<p>${esc(a.reply)}</p>`;
+    };
+  } else {
+    $('subBody').innerHTML = `<p class="empty">${esc(u.reply)}</p>`;
+  }
+}
+
+document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.view === 'account') loadAccount();
+}));
+
+$('simPurchase').onclick = async () => {
+  $('loyaltyBody').innerHTML = '<p class="empty">Recording purchase…</p>';
+  const d = await ask('how many points did I earn?');
+  if (d.error) { $('loyaltyBody').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
+  const r = d.payload || {};
+  const pct = r.tier === 'Platinum' ? 100 : Math.max(4, 100 - Math.min(100, (r.points_to_next_tier || 0) / 20));
+  $('loyaltyBody').innerHTML = `<p>${esc(r.nudge || d.reply)}</p>
+    <div class="bar"><div style="width:${pct}%"></div></div>
+    <div class="meta">Balance ${r.balance} · Tier ${esc(r.tier || '')}</div>`;
+  if (r.tier) $('tierBadge').textContent = `${r.tier} tier`;
+};
+
+$('redeemBtn').onclick = async () => {
+  const n = $('redeemAmt').value;
+  if (!n) return;
+  const d = await ask(`redeem ${n}`);
+  $('redeemResult').innerHTML = `<p class="meta">${esc(d.reply)}</p>`;
+};
 </script>
 </body>
 </html>
