@@ -217,6 +217,7 @@ app.post('/loyalty/:customerId/accrue', async c => {
 app.post('/loyalty/:customerId/redeem', async c => {
   const id = c.req.param('customerId');
   const { points } = await c.req.json<any>();
+  if (!(Number(points) > 0)) return c.json({ error: 'points must be a positive number' }, 400);
   const a = await c.env.DB.prepare(`SELECT * FROM loyalty_accounts WHERE customer_id = ?`).bind(id).first<any>();
   if (!a) return c.json({ error: 'account_not_found' }, 404);
   if (a.points_balance < points) return c.json({ redeemed: false, shortfall: points - a.points_balance, balance: a.points_balance });

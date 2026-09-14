@@ -54,7 +54,9 @@ export class SessionDO {
     if (url.pathname === '/reset') { await this.state.storage.deleteAll(); return Response.json({ reset: true }); }
     if (url.pathname !== '/message') return new Response('not found', { status: 404 });
 
-    const { customerId, text, unsafeRanking } = await req.json<any>();
+    let body: any;
+    try { body = await req.json(); } catch { return Response.json({ error: 'invalid_json', detail: 'request body must be valid JSON' }, { status: 400 }); }
+    const { customerId, text, unsafeRanking } = body;
     let session = await this.load();
 
     // A different customer on the same session id starts clean. Context never leaks
@@ -69,6 +71,7 @@ export class SessionDO {
     trace.add({ stage: 'route', actor: 'channel', label: 'trigger captured',
       detail: { session: this.state.id.toString().slice(0, 12), customerId, utterance: text }, m3_ref: 'S1.2' });
 
+    try {
     // Sequence 1 runs once per session; everything downstream depends on it.
     if (!session.working.segment) {
       trace.add({ stage: 'route', actor: 'orchestrator', label: 'no segment in session context - dispatching Profiling Agent', m3_ref: 'S1.6' });
@@ -182,13 +185,19 @@ export class SessionDO {
       case 'loyalty.event': {
         agentName = 'loyalty';
         const lk = new Kernel('loyalty', trace, this.env);
-        const redeemMatch = text.match(/redeem\s+(\d+)/i);
+        const redeemMatch = text.match(/redeem\s+(-?\d+)/i);
         if (redeemMatch) {
-          const r = await loyalty.redeem(lk, customerId, Number(redeemMatch[1]));
-          payload = r;
-          reply = r.redeemed
-            ? `Redeemed ${redeemMatch[1]} points. Balance is now ${r.balance}, and GBP ${r.liability_released_gbp} of point liability has been released.`
-            : `That reward needs ${r.shortfall} more points. Your balance is ${r.balance}.`;
+          const amount = Number(redeemMatch[1]);
+          if (amount <= 0) {
+            payload = { redeemed: false, reason: 'invalid_amount' };
+            reply = 'Enter a positive number of points to redeem.';
+          } else {
+            const r = await loyalty.redeem(lk, customerId, amount);
+            payload = r;
+            reply = r.redeemed
+              ? `Redeemed ${amount} points. Balance is now ${r.balance}, and GBP ${r.liability_released_gbp} of point liability has been released.`
+              : `That reward needs ${r.shortfall} more points. Your balance is ${r.balance}.`;
+          }
         } else {
           trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent', m3_ref: 'S5.3' });
           const r = await loyalty.accrue(lk, customerId, 'purchase', Math.round(Number(segment.evidence.avg_unit_price_gbp) || 40));
@@ -217,5 +226,8 @@ export class SessionDO {
         across_sessions: longTerm,
       },
     });
+    } catch (e) {
+      return Response.json({ error: 'agent_error', detail: String(e), trace: trace.steps }, { status: 500 });
+    }
   }
 }

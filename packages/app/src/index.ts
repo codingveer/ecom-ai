@@ -13,7 +13,8 @@ const app = new Hono<{ Bindings: Env }>();
 const session = (env: Env, id: string) => env.SESSION.get(env.SESSION.idFromName(id));
 
 app.post('/session/:id/message', async c => {
-  const body = await c.req.json<any>();
+  let body: any;
+  try { body = await c.req.json(); } catch { return c.json({ error: 'invalid_json', detail: 'request body must be valid JSON' }, 400); }
   if (!body?.customerId || !body?.text) return c.json({ error: 'customerId and text are required' }, 400);
   const r = await session(c.env, c.req.param('id')).fetch('https://session/message', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
