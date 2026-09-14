@@ -79,6 +79,7 @@ export async function rank(
     segment: segment.affluence, affluence: segment.affluence_score, tier: segment.tier,
     aup: segment.evidence.avg_unit_price_gbp, premium_share: segment.evidence.premium_item_share,
     fit_size: fitSize ?? 'not known', query,
+    guardrail_blocked: verdict.decision === 'block',
     top: top.map(t => `${t.title} (${t.price_tier}, GBP ${t.price_gbp})`).join('; '),
   }, 'S2.13');
 

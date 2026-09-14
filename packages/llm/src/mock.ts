@@ -52,7 +52,10 @@ export function mockComplete(promptId: string, vars: Record<string, any>, system
     case 'discovery.rationale': {
       const seg = String(vars.segment ?? 'unknown');
       const premium = Number(vars.premium_share ?? 0);
-      text = seg === 'affluent'
+      const blocked = vars.guardrail_blocked === true || vars.guardrail_blocked === 'true';
+      text = blocked
+        ? `Personalised ranking was blocked by the fairness guardrail because it would have excluded a price tier, so a neutral ranking - by relevance and rating only, the same for every segment - is shown instead.`
+        : seg === 'affluent'
         ? `Ranked premium and core ranges first because ${Math.round(premium * 100)}% of past purchases were premium-tier at an average unit price of GBP ${vars.aup}, and ${vars.tier} tier signals sustained spend.`
         : `Surfaced value and private-label ranges first because past purchases average GBP ${vars.aup} per item with a ${Math.round(premium * 100)}% premium share, so higher price points would rank items this customer does not buy.`;
       break;
