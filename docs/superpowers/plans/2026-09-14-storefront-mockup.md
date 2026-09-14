@@ -1,0 +1,523 @@
+# Storefront Mockup Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Add a single static page, `packages/app/public/shop.html`, that presents the existing five-agent backend as a realistic e-commerce storefront (search → results, product detail with size check, account with subscription/loyalty), instead of the debug-console view already at `packages/app/public/index.html`.
+
+**Architecture:** One new self-contained HTML file with inline `<style>`/`<script>`, no build step, no framework — same pattern as `index.html`. It is served by the `app` Worker's existing `ASSETS` binding and catch-all route (`packages/app/src/index.ts:70`, unchanged). Every action calls the exact same `POST /session/:id/message` endpoint the console uses, sending short natural-language strings that the existing intent classifier already routes (verified against `packages/llm/src/mock.ts`'s actual regex rules).
+
+**Tech Stack:** Vanilla HTML/CSS/JS. No new npm dependencies. No backend, contract, or agent changes.
+
+## Global Constraints
+
+- No backend changes: no new endpoints, tool contracts, agents, or edits to `session-do.ts`.
+- Single new file: `packages/app/public/shop.html`. Only other file touched is `packages/app/public/index.html` (one added link) and `README.md` (one added line) in the final task.
+- Session id format: `'shop-' + customerId + '-' + Date.now()` — distinct from the console's `'web-'` prefix so the two UIs never share session state for the same persona.
+- Reuse the console's CSS custom properties for visual consistency: `--ink:#101A3D; --paper:#fff; --rule:#DBDFEC; --mute:#5E6684; --front:#F4F6FB; --violet:#5B4B9E; --teal:#0E7C7B; --coral:#D9451F; --amber:#8A6A12`.
+- Product category values are exactly: `dresses, tops, knitwear, outerwear, trousers, skirts, footwear, accessories` (confirmed in `scripts/gen-seed.ts:30`). Any category-keyed lookup (icon, colour) must use these exact strings.
+- No product images — CSS placeholder blocks (emoji + category-tinted background) only, since the seed data has none.
+- "Check my size" and similar synthetic messages must include the literal SKU (format `SKU-\d{5}`, e.g. `SKU-00675`) and must NOT include a category keyword, so the fit agent resolves category from the real product record instead of a guessed word (see `packages/app/src/agents/fit.ts:31`, `cat = category ?? product?.category ?? 'dresses'` — an entity-extracted category would incorrectly take priority over the real one).
+- "Simulate a purchase" (not "Check my points") is the correct label for the loyalty-balance action, because `packages/app/src/agents/loyalty.ts`'s `accrue()` always records a new accrual — there is no side-effect-free balance read in the backend.
+
+---
+
+### Task 1: Page shell — header, nav, personas, both empty view containers
+
+**Files:**
+- Create: `packages/app/public/shop.html`
+
+**Interfaces:**
+- Produces (for Tasks 2-4 to consume): a global `customerId` (string, one of `'C001'|'C002'|'C003'`), a global `sessionId` (string), a global `currentView` (`'shop'|'account'`), helper `$(id)` (== `document.getElementById(id)`), helper `esc(s)` (HTML-escapes a string), and `async function ask(text)` — POSTs `{customerId, text}` to `/session/${sessionId}/message` and returns the parsed JSON body, or `{error:'unreachable', reply:'The shop backend is not reachable. Start the stack with npm run dev.'}` on a network failure. Also produces the DOM containers later tasks render into: `#pills`, `#blurb`, `#grid` (inside `#view-shop`), `#profileBody`, `#subBody`, `#loyaltyBody` (inside `#view-account`), `#overlay` > `#panelBody` (product detail), `#tierBadge`, `#cartCount` (header).
+
+- [ ] **Step 1: Write `packages/app/public/shop.html`**
+
+```html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neu.Tail — Shop</title>
+<style>
+  :root{
+    --ink:#101A3D; --paper:#fff; --rule:#DBDFEC; --mute:#5E6684;
+    --front:#F4F6FB; --violet:#5B4B9E; --teal:#0E7C7B; --coral:#D9451F; --amber:#8A6A12;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--front)}
+  header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--rule);padding:14px 22px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;z-index:10}
+  .brand{font-weight:700;font-size:17px;letter-spacing:-.01em}
+  nav.tabs{display:flex;gap:4px}
+  nav.tabs button{border:0;background:transparent;padding:8px 12px;border-radius:7px;font:inherit;font-size:13.5px;color:var(--mute);cursor:pointer}
+  nav.tabs button.active{background:var(--front);color:var(--ink);font-weight:600}
+  .personas{display:flex;gap:6px}
+  .persona{border:1px solid var(--rule);background:#fff;border-radius:999px;padding:5px 11px;cursor:pointer;font-size:12.5px;color:var(--ink)}
+  .persona[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .spacer{flex:1}
+  .badge-pill{border:1px solid var(--rule);border-radius:999px;padding:5px 11px;font-size:12.5px;color:var(--mute);white-space:nowrap}
+  .cart{border:1px solid var(--rule);border-radius:999px;padding:5px 11px;font-size:13px;white-space:nowrap}
+  .link-out{font-size:12.5px;color:var(--violet);text-decoration:none;white-space:nowrap}
+  main{max-width:1040px;margin:0 auto;padding:24px 22px 60px}
+  .hero{display:flex;gap:10px;margin-bottom:18px}
+  .hero input{flex:1;border:1px solid var(--rule);border-radius:10px;padding:12px 15px;font:inherit}
+  .hero button{border:0;background:var(--ink);color:#fff;border-radius:10px;padding:12px 20px;font:inherit;cursor:pointer}
+  .pills{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:20px}
+  .pill{border:1px solid var(--rule);background:#fff;border-radius:999px;padding:6px 13px;font-size:12.5px;cursor:pointer;color:var(--mute)}
+  .pill:hover{color:var(--ink)}
+  .blurb{background:#fff;border:1px solid var(--rule);border-radius:10px;padding:13px 16px;margin-bottom:18px;font-size:13.5px;color:var(--mute)}
+  .blurb b{color:var(--ink)}
+  .why{color:var(--violet);cursor:pointer;font-size:12.5px;display:inline-block;margin-top:6px}
+  .why-body{display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--rule);font-size:12.5px;color:var(--mute)}
+  .why-body.open{display:block}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+  .card{background:#fff;border:1px solid var(--rule);border-radius:12px;overflow:hidden;cursor:pointer;text-align:left;padding:0;font:inherit;color:inherit}
+  .card .ph{height:140px;display:flex;align-items:center;justify-content:center;font-size:34px}
+  .card .body{padding:11px 12px}
+  .card .brand{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+  .card .title{font-size:13.5px;font-weight:600;margin:2px 0 6px}
+  .card .price{font-weight:700}
+  .card .meta{font-size:11.5px;color:var(--mute);margin-top:4px}
+  .empty{color:var(--mute);font-size:13.5px}
+
+  .overlay{position:fixed;inset:0;background:rgba(16,26,61,.4);display:none;align-items:center;justify-content:center;padding:20px;z-index:20}
+  .overlay.open{display:flex}
+  .panel{background:#fff;border-radius:14px;max-width:480px;width:100%;max-height:88vh;overflow:auto;padding:22px;position:relative}
+  .panel .ph{height:180px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:52px;margin-bottom:14px}
+  .close{position:absolute;top:14px;right:16px;border:0;background:none;font-size:20px;cursor:pointer;color:var(--mute)}
+  .size-row{display:flex;gap:7px;margin:12px 0}
+  .size-chip{border:1px solid var(--rule);border-radius:8px;padding:8px 13px;font-size:13px}
+  .size-chip.rec{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
+  .result-box{background:var(--front);border-radius:10px;padding:12px 14px;margin-top:12px;font-size:13.5px}
+  .result-box.warn{background:#FBEFE9}
+  .actions{display:flex;gap:9px;margin-top:16px}
+  .btn{border:0;border-radius:9px;padding:11px 16px;font:inherit;cursor:pointer}
+  .btn.primary{background:var(--ink);color:#fff}
+  .btn.ghost{background:#fff;border:1px solid var(--rule);color:var(--ink)}
+
+  .cards-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:700px){.cards-2{grid-template-columns:1fr}}
+  .acct-card{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:18px;margin-bottom:16px}
+  .acct-card h3{margin:0 0 8px;font-size:14px}
+  .bar{height:8px;background:var(--front);border-radius:99px;overflow:hidden;margin:8px 0}
+  .bar > div{height:100%;background:var(--violet)}
+  .redeem-row{display:flex;gap:8px;margin-top:10px;align-items:center}
+  .redeem-row input{width:90px;border:1px solid var(--rule);border-radius:8px;padding:8px 10px;font:inherit}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Neu.Tail</div>
+  <nav class="tabs" id="tabs">
+    <button data-view="shop" class="active">Shop</button>
+    <button data-view="account">Account</button>
+  </nav>
+  <div class="personas" id="personas"></div>
+  <div class="spacer"></div>
+  <span class="badge-pill" id="tierBadge">Sign in to see your tier</span>
+  <span class="cart">Bag <b id="cartCount">0</b></span>
+  <a class="link-out" href="/index.html">View technical console →</a>
+</header>
+
+<main>
+  <section id="view-shop">
+    <div class="hero">
+      <input type="text" id="search" placeholder="Search for anything..." autocomplete="off">
+      <button id="searchBtn">Search</button>
+    </div>
+    <div class="pills" id="pills"></div>
+    <div id="blurb"></div>
+    <div class="grid" id="grid"><p class="empty">Search for something, or pick a category, to see personalised results.</p></div>
+  </section>
+
+  <section id="view-account" style="display:none">
+    <div class="cards-2">
+      <div class="acct-card">
+        <h3>Profile</h3>
+        <div id="profileBody" class="empty">Switch to this tab to load your profile.</div>
+      </div>
+      <div class="acct-card">
+        <h3>Subscription</h3>
+        <div id="subBody" class="empty">Switch to this tab to load your plan.</div>
+      </div>
+    </div>
+    <div class="acct-card">
+      <h3>Loyalty points</h3>
+      <div id="loyaltyBody" class="empty">Simulate a purchase to see your balance and tier progress.</div>
+      <button class="btn ghost" id="simPurchase">Simulate a purchase</button>
+      <div class="redeem-row">
+        <input type="number" id="redeemAmt" placeholder="Points">
+        <button class="btn ghost" id="redeemBtn">Redeem</button>
+      </div>
+      <div id="redeemResult"></div>
+    </div>
+  </section>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="panel" id="panelBody"></div>
+</div>
+
+<script>
+const PERSONAS = [
+  { id:'C001', name:'Priya', note:'affluent, loyal, rich fit history' },
+  { id:'C002', name:'Aditi',  note:'value-seeking, new, no fit consent' },
+  { id:'C003', name:'Meera', note:'free tier, third styling session' },
+];
+
+let customerId = 'C001';
+let sessionId = 'shop-' + customerId + '-' + Date.now();
+let currentView = 'shop';
+let cartCount = 0;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function ask(text){
+  try {
+    const r = await fetch(`/session/${sessionId}/message`, {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ customerId, text })
+    });
+    return await r.json();
+  } catch (e) {
+    return { error:'unreachable', reply:'The shop backend is not reachable. Start the stack with npm run dev.' };
+  }
+}
+
+function resetPersonaState(){
+  cartCount = 0; $('cartCount').textContent = '0';
+  $('tierBadge').textContent = 'Sign in to see your tier';
+  $('grid').innerHTML = '<p class="empty">Search for something, or pick a category, to see personalised results.</p>';
+  $('blurb').innerHTML = '';
+  $('search').value = '';
+  $('profileBody').innerHTML = '<p class="empty">Switch to this tab to load your profile.</p>';
+  $('subBody').innerHTML = '<p class="empty">Switch to this tab to load your plan.</p>';
+  $('loyaltyBody').innerHTML = '<p class="empty">Simulate a purchase to see your balance and tier progress.</p>';
+  $('redeemResult').innerHTML = '';
+  $('overlay').classList.remove('open');
+}
+
+function renderPersonas(){
+  $('personas').innerHTML = PERSONAS.map(p =>
+    `<button class="persona" data-id="${p.id}" aria-pressed="${p.id===customerId}" title="${esc(p.note)}">${esc(p.name)}</button>`
+  ).join('');
+  document.querySelectorAll('.persona').forEach(b => b.onclick = () => {
+    customerId = b.dataset.id;
+    sessionId = 'shop-' + customerId + '-' + Date.now();
+    resetPersonaState();
+    renderPersonas();
+  });
+}
+
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  currentView = b.dataset.view;
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('active', x === b));
+  $('view-shop').style.display = currentView === 'shop' ? '' : 'none';
+  $('view-account').style.display = currentView === 'account' ? '' : 'none';
+});
+
+renderPersonas();
+</script>
+</body>
+</html>
+```
+
+- [ ] **Step 2: Verify the shell renders and is interactive (no backend calls needed yet)**
+
+Start the local stack (`npm run dev` from the repo root, or reuse an already-running instance) and open `http://localhost:8100/shop.html` in a browser.
+
+Expected:
+- Header shows "Neu.Tail", a "Shop"/"Account" tab pair (Shop active), three persona buttons (Priya/Aditi/Meera, Priya pressed), a "Sign in to see your tier" pill, "Bag 0", and a "View technical console →" link.
+- Clicking "Account" hides the shop section and shows the three account cards; clicking "Shop" switches back.
+- Clicking "Aditi" then "Meera" changes which persona button is pressed; the tier pill resets to "Sign in to see your tier" and "Bag" resets to 0 each time.
+- No errors in the browser console.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add packages/app/public/shop.html
+git commit -m "Add storefront shell: header, persona switcher, view tabs"
+```
+
+---
+
+### Task 2: Shop view — search, category pills, product grid, personalisation blurb
+
+**Files:**
+- Modify: `packages/app/public/shop.html` (insert before the closing `</script>` tag; everything from Task 1 stays as-is)
+
+**Interfaces:**
+- Consumes: `ask(text)`, `$(id)`, `esc(s)`, globals `customerId`/`sessionId` (Task 1). DOM: `#search`, `#searchBtn`, `#pills`, `#blurb`, `#grid` (Task 1).
+- Produces (for Task 3 to consume): global `let lastProducts = []` — the array from the most recent `discovery.rank` response's `payload.products`, each shaped `{sku, title, brand, category, price_gbp, price_tier, cut, rating, stock, score, why}` (confirmed against `packages/app/src/agents/discovery.ts`'s `top` mapping). Also produces `CAT_ICON` and `CAT_COLOR` (objects keyed by the 8 category strings), reused by Task 3's product overlay.
+
+- [ ] **Step 1: Insert the following before `</script>` in `packages/app/public/shop.html`**
+
+```html
+<script>
+const CATEGORY_PILLS = ['occasion dress','coat','jumper','trousers','trainers'];
+const CAT_ICON = { dresses:'👗', outerwear:'🧥', knitwear:'🧶', trousers:'👖', tops:'👕', skirts:'👗', footwear:'👟', accessories:'👜' };
+const CAT_COLOR = { dresses:'#F3E8FF', outerwear:'#E6F3F2', knitwear:'#FBEFE9', trousers:'#EAF0FB', tops:'#F4F6FB', skirts:'#FDF2E9', footwear:'#EFEFEF', accessories:'#F7EAF0' };
+let lastProducts = [];
+
+$('pills').innerHTML = CATEGORY_PILLS.map(c => `<button class="pill">${esc(c)}</button>`).join('');
+document.querySelectorAll('.pill').forEach(p => p.onclick = () => { $('search').value = 'show me a ' + p.textContent; runSearch(); });
+$('searchBtn').onclick = runSearch;
+$('search').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
+
+async function runSearch(){
+  const text = $('search').value.trim();
+  if (!text) return;
+  $('grid').innerHTML = '<p class="empty">Searching…</p>';
+  $('blurb').innerHTML = '';
+  const d = await ask(text);
+  if (d.error) { $('grid').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
+  if (d.intent !== 'discovery.rank' || !d.payload?.products) {
+    $('grid').innerHTML = `<p class="empty">${esc(d.reply || 'No results for that.')}</p>`;
+    return;
+  }
+  lastProducts = d.payload.products;
+  const mix = Object.entries(d.payload.price_tier_mix || {}).map(([t,n]) => `${n} ${t}`).join(', ');
+  $('blurb').innerHTML = `<div class="blurb"><b>Because of your shopping history</b> — ${esc(d.payload.rationale)}
+    <div class="why" id="whyToggle">Why am I seeing this? ▾</div>
+    <div class="why-body" id="whyBody">Ranked ${d.payload.candidates} eligible products for you; the top 5 mix is ${esc(mix)}.</div>
+  </div>`;
+  $('whyToggle').onclick = () => $('whyBody').classList.toggle('open');
+  if (!lastProducts.length) { $('grid').innerHTML = '<p class="empty">No stocked products matched that search.</p>'; return; }
+  $('grid').innerHTML = lastProducts.map((p,i) => `
+    <button class="card" data-i="${i}">
+      <div class="ph" style="background:${CAT_COLOR[p.category] || '#F4F6FB'}">${CAT_ICON[p.category] || '🛍️'}</div>
+      <div class="body">
+        <div class="brand">${esc(p.brand)}</div>
+        <div class="title">${esc(p.title)}</div>
+        <div class="price">£${p.price_gbp}</div>
+        <div class="meta">★ ${p.rating} · ${p.stock > 8 ? 'In stock' : p.stock > 0 ? 'Low stock' : 'Out of stock'}</div>
+      </div>
+    </button>`).join('');
+  document.querySelectorAll('#grid .card').forEach(c => c.onclick = () => openProduct(lastProducts[+c.dataset.i]));
+}
+</script>
+```
+
+- [ ] **Step 2: Verify personalised search results differ by persona**
+
+With the local stack running, open `http://localhost:8100/shop.html`:
+1. With Priya (C001) selected, type "show me an occasion dress" and press Enter (or click Search).
+   Expected: the blurb shows a rationale sentence, the grid shows 5 product cards with titles/brands/prices, and most cards skew toward premium-tier items (Priya is the affluent persona).
+2. Click "Why am I seeing this?" — expected: it expands to show the candidate count and price-tier mix; clicking again collapses it.
+3. Switch to Aditi (C002) and run the exact same search text.
+   Expected: the blurb's rationale text differs (value/private-label framing), and the product set and/or price tiers differ from Priya's — this is the core personalisation payoff, confirm it visibly changes.
+4. Click a category pill (e.g. "trainers"). Expected: the search box fills with "show me a trainers" and results reload with footwear-appropriate items.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add packages/app/public/shop.html
+git commit -m "Add shop search, category pills, and personalised product grid"
+```
+
+---
+
+### Task 3: Product detail overlay — size check, add to bag
+
+**Files:**
+- Modify: `packages/app/public/shop.html` (insert before the closing `</script>` tag)
+
+**Interfaces:**
+- Consumes: `ask(text)`, `$(id)`, `esc(s)` (Task 1); `lastProducts`, `CAT_ICON`, `CAT_COLOR` (Task 2); `#overlay`/`#panelBody`, `#cartCount` (Task 1 markup); global `cartCount` (Task 1).
+- Produces: `function openProduct(p)` where `p` is one element of `lastProducts` — used only within this task, but its existence and signature (`openProduct(productObject)`) is what Task 2's card click handlers already call.
+
+- [ ] **Step 1: Insert the following before `</script>` in `packages/app/public/shop.html`**
+
+```html
+<script>
+function openProduct(p){
+  $('panelBody').innerHTML = `
+    <button class="close" id="closeOverlay">×</button>
+    <div class="ph" style="background:${CAT_COLOR[p.category] || '#F4F6FB'}">${CAT_ICON[p.category] || '🛍️'}</div>
+    <div class="brand">${esc(p.brand)}</div>
+    <h2 style="margin:2px 0 6px;font-size:18px">${esc(p.title)}</h2>
+    <div class="price" style="font-size:17px">£${p.price_gbp}</div>
+    <div class="meta">★ ${p.rating} · ${p.stock > 8 ? 'In stock' : p.stock > 0 ? 'Low stock' : 'Out of stock'}</div>
+    <div class="size-row" id="sizeRow">${['XS','S','M','L','XL'].map(s => `<span class="size-chip">${s}</span>`).join('')}</div>
+    <div class="actions">
+      <button class="btn ghost" id="checkFit">Check my size</button>
+      <button class="btn primary" id="addBag">Add to bag</button>
+    </div>
+    <div id="fitResult"></div>
+  `;
+  $('overlay').classList.add('open');
+  $('closeOverlay').onclick = () => $('overlay').classList.remove('open');
+  $('addBag').onclick = () => { cartCount++; $('cartCount').textContent = String(cartCount); };
+  $('checkFit').onclick = async () => {
+    $('fitResult').innerHTML = '<p class="empty">Checking…</p>';
+    const d = await ask(`what size should I get for ${p.sku}?`);
+    if (d.error) { $('fitResult').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
+    const f = d.payload || {};
+    if (f.abstained) {
+      $('fitResult').innerHTML = `<div class="result-box warn">${esc(f.explanation)}
+        <div class="why" id="whyFit">Why? ▾</div>
+        <div class="why-body" id="whyFitBody">${esc(JSON.stringify(f.evidence || {}))}</div></div>`;
+    } else {
+      document.querySelectorAll('#sizeRow .size-chip').forEach(chip => {
+        if (chip.textContent === f.recommended_size) chip.classList.add('rec');
+      });
+      const stockNote = f.size_in_stock === false ? ' Currently out of stock in that size.' : '';
+      $('fitResult').innerHTML = `<div class="result-box">Recommended size <b>${esc(f.recommended_size)}</b> at ${f.confidence}% confidence. ${esc(f.explanation)}${esc(stockNote)}
+        <div class="why" id="whyFit">Why? ▾</div>
+        <div class="why-body" id="whyFitBody">Grading offset ${f.evidence?.grading_delta_cm}cm · ${f.evidence?.observations} kept purchases in this category · brand cut ${esc(String(f.evidence?.brand_cut || ''))}</div></div>`;
+    }
+    $('whyFit').onclick = () => $('whyFitBody').classList.toggle('open');
+  };
+}
+</script>
+```
+
+- [ ] **Step 2: Verify size-check behaves correctly for both a customer with fit history and one without**
+
+With the local stack running, on `http://localhost:8100/shop.html`:
+1. As Priya (C001), search "show me an occasion dress", click any product card.
+   Expected: an overlay opens with a larger placeholder, title/brand/price, and five size chips (XS-XL).
+2. Click "Check my size".
+   Expected: within a couple seconds, one size chip gets highlighted (dark background) and a result box shows "Recommended size X at NN% confidence" plus an explanation sentence. Click "Why?" — expected: expands to show grading offset / observation count / brand cut.
+3. Click "Add to bag". Expected: the header's "Bag" count increments by 1. Close the overlay (×).
+4. Switch to Aditi (C002) (who has no fit consent on file), search the same query, open a product, click "Check my size".
+   Expected: no size chip is highlighted; the result box (with a light warning background) shows the abstain explanation ("no fit-data opt-in... no recommendation") instead of a size.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add packages/app/public/shop.html
+git commit -m "Add product detail overlay with size-check and add-to-bag"
+```
+
+---
+
+### Task 4: Account view — profile, subscription/upsell, loyalty points
+
+**Files:**
+- Modify: `packages/app/public/shop.html` (insert before the closing `</script>` tag)
+
+**Interfaces:**
+- Consumes: `ask(text)`, `$(id)`, `esc(s)` (Task 1); `#profileBody`, `#subBody`, `#loyaltyBody`, `#simPurchase`, `#redeemAmt`, `#redeemBtn`, `#redeemResult`, `#tierBadge` (Task 1 markup); the tab-switch handler in Task 1 (extended in this task to call `loadAccount()`).
+- Produces: `async function loadAccount()` (fetches profile + subscription state and renders both cards) — called whenever the Account tab is opened.
+
+- [ ] **Step 1: Insert the following before `</script>` in `packages/app/public/shop.html`**
+
+```html
+<script>
+async function loadAccount(){
+  $('profileBody').innerHTML = '<p class="empty">Loading your profile…</p>';
+  $('subBody').innerHTML = '<p class="empty">Loading…</p>';
+
+  const p = await ask('who am I');
+  if (p.error) { $('profileBody').innerHTML = `<p class="empty">${esc(p.reply)}</p>`; }
+  else {
+    const seg = p.payload?.segment;
+    if (seg) {
+      $('profileBody').innerHTML = `<div>${esc(String(seg.affluence).replace('_',' '))} · ${esc(seg.loyalty_status)}
+        <div class="meta">Tier ${esc(seg.tier)} · ${seg.evidence.orders} orders · ${seg.evidence.tenure_days} days as a customer</div></div>`;
+      $('tierBadge').textContent = `${seg.tier} tier`;
+    } else {
+      $('profileBody').innerHTML = `<p class="empty">${esc(p.reply || 'Could not load profile.')}</p>`;
+    }
+  }
+
+  const u = await ask('tell me about the styling advisory plan');
+  if (u.error) { $('subBody').innerHTML = `<p class="empty">${esc(u.reply)}</p>`; return; }
+  if (u.payload?.offer) {
+    $('subBody').innerHTML = `<p>${esc(u.payload.offer.copy)}</p>
+      <button class="btn primary" id="acceptOffer">Accept · £${u.payload.offer.price_gbp_month}/mo</button>`;
+    $('acceptOffer').onclick = async () => {
+      const a = await ask('accept');
+      $('subBody').innerHTML = `<p>${esc(a.reply)}</p>`;
+    };
+  } else {
+    $('subBody').innerHTML = `<p class="empty">${esc(u.reply)}</p>`;
+  }
+}
+
+document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.view === 'account') loadAccount();
+}));
+
+$('simPurchase').onclick = async () => {
+  $('loyaltyBody').innerHTML = '<p class="empty">Recording purchase…</p>';
+  const d = await ask('how many points did I earn?');
+  if (d.error) { $('loyaltyBody').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
+  const r = d.payload || {};
+  const pct = r.tier === 'Platinum' ? 100 : Math.max(4, 100 - Math.min(100, (r.points_to_next_tier || 0) / 20));
+  $('loyaltyBody').innerHTML = `<p>${esc(r.nudge || d.reply)}</p>
+    <div class="bar"><div style="width:${pct}%"></div></div>
+    <div class="meta">Balance ${r.balance} · Tier ${esc(r.tier || '')}</div>`;
+  if (r.tier) $('tierBadge').textContent = `${r.tier} tier`;
+};
+
+$('redeemBtn').onclick = async () => {
+  const n = $('redeemAmt').value;
+  if (!n) return;
+  const d = await ask(`redeem ${n}`);
+  $('redeemResult').innerHTML = `<p class="meta">${esc(d.reply)}</p>`;
+};
+</script>
+```
+
+- [ ] **Step 2: Verify the account flows for a persona at the upsell trigger point**
+
+With the local stack running, on `http://localhost:8100/shop.html`:
+1. Switch to Meera (C003) — the persona whose note is "free tier, third styling session".
+2. Click the "Account" tab. Expected: the Profile card populates with an affluence/loyalty line and tier, the header's tier pill updates, and the Subscription card shows an offer sentence plus an "Accept · £4.99/mo" button (Meera is past the free-session threshold).
+3. Click "Accept · £4.99/mo". Expected: the Subscription card replaces its content with a confirmation message mentioning she is now on the paid tier with 2x loyalty accrual.
+4. Click "Simulate a purchase" in the Loyalty card. Expected: a nudge sentence appears, a progress bar renders, and the balance/tier line shows a multiplier effect consistent with the just-accepted subscription (this is the cross-agent handoff: Loyalty reads the entitlement Upsell just wrote).
+5. Enter a point amount larger than the shown balance into the redeem field and click "Redeem". Expected: the result text explains the shortfall rather than redeeming. Enter an amount at or below the balance and redeem again — expected: a success message with the updated balance.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add packages/app/public/shop.html
+git commit -m "Add account view: profile, subscription/upsell, loyalty points"
+```
+
+---
+
+### Task 5: Cross-link from the console, doc mention, final integration check
+
+**Files:**
+- Modify: `packages/app/public/index.html` (add one link in the `<header>`)
+- Modify: `README.md` (one line in "Run it locally")
+
+**Interfaces:**
+- None produced or consumed — this task only adds a navigation link and a doc line; no shared state.
+
+- [ ] **Step 1: Add a link to the storefront from the console's header**
+
+In `packages/app/public/index.html`, inside the `<header>` element (immediately after the closing `</div>` of the `.personas` div, i.e. right before `</header>`), add:
+
+```html
+  <a href="/shop.html" style="font-size:12.5px;color:var(--violet);text-decoration:none;white-space:nowrap">View storefront mockup →</a>
+```
+
+- [ ] **Step 2: Add one line to README.md**
+
+In `README.md`, immediately after the existing paragraph that begins "Then open http://localhost:8100 and **send one throwaway message before you demo**." (in the "Run it locally" section), add a new paragraph:
+
+```markdown
+A second, simpler front end lives at http://localhost:8100/shop.html — a storefront
+mockup of the same live backend (search, product detail with size-check, account with
+subscription and loyalty points), for anyone who wants to feel the personalisation as a
+shopper would rather than read the trace panel.
+```
+
+- [ ] **Step 3: Verify both pages work together against one running backend**
+
+With the local stack running (`npm run dev`):
+1. Open `http://localhost:8100/index.html`. Expected: the header now shows a "View storefront mockup →" link; clicking it navigates to `/shop.html`.
+2. On `/shop.html`, expected: a "View technical console →" link in the header navigates back to `/index.html`.
+3. On `/shop.html`, as Priya, search for a dress, open the browser's devtools Network tab, and confirm the requests go to `/session/shop-C001-<timestamp>/message` (the `'shop-'` prefix, not `'web-'`).
+4. Open `/index.html` in a second tab, send a message as Priya there too, and confirm (via Network tab) its session id uses the `'web-'` prefix — i.e. the two UIs do not collide on the same session for the same persona.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add packages/app/public/index.html README.md
+git commit -m "Cross-link storefront mockup and console; document the new page"
+```
