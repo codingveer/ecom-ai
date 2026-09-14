@@ -20,6 +20,11 @@ everything after it is fast. `npm run smoke` replays the whole demo on the comma
 Re-run `npm run db:local` before each rehearsal — the demo mutates subscription and
 loyalty state, so a fresh load puts every persona back to its starting position.
 
+A second, simpler front end lives at http://localhost:8100/shop.html — a storefront
+mockup of the same live backend (search, product detail with size-check, account with
+subscription and loyalty points), for anyone who wants to feel the personalisation as a
+shopper would rather than read the trace panel.
+
 ## Deploying
 
 ```bash
