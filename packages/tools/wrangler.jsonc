@@ -7,7 +7,7 @@
   // No d1_databases entry. This Worker cannot reach the data store; it can only
   // call the services Worker through the contract declared in the registry.
   "kv_namespaces": [
-    { "binding": "REGISTRY", "id": "REPLACE_WITH_YOUR_KV_ID" }
+    { "binding": "REGISTRY", "id": "2b8717adec81428a9f103370da6097fe" }
   ],
   "services": [
     { "binding": "SERVICES", "service": "neutail-services" }

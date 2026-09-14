@@ -7,7 +7,7 @@
 
   // The ONLY Worker in this deployment with a database binding.
   "d1_databases": [
-    { "binding": "DB", "database_name": "NEUTAIL", "database_id": "REPLACE_WITH_YOUR_D1_ID" }
+    { "binding": "DB", "database_name": "NEUTAIL", "database_id": "675e2809-af1d-418a-8db6-6f02b64bb029" }
   ],
 
   // Not publicly routable once deployed - reached only through service bindings.
