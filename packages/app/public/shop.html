@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neu.Tail — Shop</title>
+<style>
+  :root{
+    --ink:#101A3D; --paper:#fff; --rule:#DBDFEC; --mute:#5E6684;
+    --front:#F4F6FB; --violet:#5B4B9E; --teal:#0E7C7B; --coral:#D9451F; --amber:#8A6A12;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--front)}
+  header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--rule);padding:14px 22px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;z-index:10}
+  .brand{font-weight:700;font-size:17px;letter-spacing:-.01em}
+  nav.tabs{display:flex;gap:4px}
+  nav.tabs button{border:0;background:transparent;padding:8px 12px;border-radius:7px;font:inherit;font-size:13.5px;color:var(--mute);cursor:pointer}
+  nav.tabs button.active{background:var(--front);color:var(--ink);font-weight:600}
+  .personas{display:flex;gap:6px}
+  .persona{border:1px solid var(--rule);background:#fff;border-radius:999px;padding:5px 11px;cursor:pointer;font-size:12.5px;color:var(--ink)}
+  .persona[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .spacer{flex:1}
+  .badge-pill{border:1px solid var(--rule);border-radius:999px;padding:5px 11px;font-size:12.5px;color:var(--mute);white-space:nowrap}
+  .cart{border:1px solid var(--rule);border-radius:999px;padding:5px 11px;font-size:13px;white-space:nowrap}
+  .link-out{font-size:12.5px;color:var(--violet);text-decoration:none;white-space:nowrap}
+  main{max-width:1040px;margin:0 auto;padding:24px 22px 60px}
+  .hero{display:flex;gap:10px;margin-bottom:18px}
+  .hero input{flex:1;border:1px solid var(--rule);border-radius:10px;padding:12px 15px;font:inherit}
+  .hero button{border:0;background:var(--ink);color:#fff;border-radius:10px;padding:12px 20px;font:inherit;cursor:pointer}
+  .pills{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:20px}
+  .pill{border:1px solid var(--rule);background:#fff;border-radius:999px;padding:6px 13px;font-size:12.5px;cursor:pointer;color:var(--mute)}
+  .pill:hover{color:var(--ink)}
+  .blurb{background:#fff;border:1px solid var(--rule);border-radius:10px;padding:13px 16px;margin-bottom:18px;font-size:13.5px;color:var(--mute)}
+  .blurb b{color:var(--ink)}
+  .why{color:var(--violet);cursor:pointer;font-size:12.5px;display:inline-block;margin-top:6px}
+  .why-body{display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--rule);font-size:12.5px;color:var(--mute)}
+  .why-body.open{display:block}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+  .card{background:#fff;border:1px solid var(--rule);border-radius:12px;overflow:hidden;cursor:pointer;text-align:left;padding:0;font:inherit;color:inherit}
+  .card .ph{height:140px;display:flex;align-items:center;justify-content:center;font-size:34px}
+  .card .body{padding:11px 12px}
+  .card .brand{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+  .card .title{font-size:13.5px;font-weight:600;margin:2px 0 6px}
+  .card .price{font-weight:700}
+  .card .meta{font-size:11.5px;color:var(--mute);margin-top:4px}
+  .empty{color:var(--mute);font-size:13.5px}
+
+  .overlay{position:fixed;inset:0;background:rgba(16,26,61,.4);display:none;align-items:center;justify-content:center;padding:20px;z-index:20}
+  .overlay.open{display:flex}
+  .panel{background:#fff;border-radius:14px;max-width:480px;width:100%;max-height:88vh;overflow:auto;padding:22px;position:relative}
+  .panel .ph{height:180px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:52px;margin-bottom:14px}
+  .close{position:absolute;top:14px;right:16px;border:0;background:none;font-size:20px;cursor:pointer;color:var(--mute)}
+  .size-row{display:flex;gap:7px;margin:12px 0}
+  .size-chip{border:1px solid var(--rule);border-radius:8px;padding:8px 13px;font-size:13px}
+  .size-chip.rec{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
+  .result-box{background:var(--front);border-radius:10px;padding:12px 14px;margin-top:12px;font-size:13.5px}
+  .result-box.warn{background:#FBEFE9}
+  .actions{display:flex;gap:9px;margin-top:16px}
+  .btn{border:0;border-radius:9px;padding:11px 16px;font:inherit;cursor:pointer}
+  .btn.primary{background:var(--ink);color:#fff}
+  .btn.ghost{background:#fff;border:1px solid var(--rule);color:var(--ink)}
+
+  .cards-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:700px){.cards-2{grid-template-columns:1fr}}
+  .acct-card{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:18px;margin-bottom:16px}
+  .acct-card h3{margin:0 0 8px;font-size:14px}
+  .bar{height:8px;background:var(--front);border-radius:99px;overflow:hidden;margin:8px 0}
+  .bar > div{height:100%;background:var(--violet)}
+  .redeem-row{display:flex;gap:8px;margin-top:10px;align-items:center}
+  .redeem-row input{width:90px;border:1px solid var(--rule);border-radius:8px;padding:8px 10px;font:inherit}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Neu.Tail</div>
+  <nav class="tabs" id="tabs">
+    <button data-view="shop" class="active">Shop</button>
+    <button data-view="account">Account</button>
+  </nav>
+  <div class="personas" id="personas"></div>
+  <div class="spacer"></div>
+  <span class="badge-pill" id="tierBadge">Sign in to see your tier</span>
+  <span class="cart">Bag <b id="cartCount">0</b></span>
+  <a class="link-out" href="/index.html">View technical console →</a>
+</header>
+
+<main>
+  <section id="view-shop">
+    <div class="hero">
+      <input type="text" id="search" placeholder="Search for anything..." autocomplete="off">
+      <button id="searchBtn">Search</button>
+    </div>
+    <div class="pills" id="pills"></div>
+    <div id="blurb"></div>
+    <div class="grid" id="grid"><p class="empty">Search for something, or pick a category, to see personalised results.</p></div>
+  </section>
+
+  <section id="view-account" style="display:none">
+    <div class="cards-2">
+      <div class="acct-card">
+        <h3>Profile</h3>
+        <div id="profileBody" class="empty">Switch to this tab to load your profile.</div>
+      </div>
+      <div class="acct-card">
+        <h3>Subscription</h3>
+        <div id="subBody" class="empty">Switch to this tab to load your plan.</div>
+      </div>
+    </div>
+    <div class="acct-card">
+      <h3>Loyalty points</h3>
+      <div id="loyaltyBody" class="empty">Simulate a purchase to see your balance and tier progress.</div>
+      <button class="btn ghost" id="simPurchase">Simulate a purchase</button>
+      <div class="redeem-row">
+        <input type="number" id="redeemAmt" placeholder="Points">
+        <button class="btn ghost" id="redeemBtn">Redeem</button>
+      </div>
+      <div id="redeemResult"></div>
+    </div>
+  </section>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="panel" id="panelBody"></div>
+</div>
+
+<script>
+const PERSONAS = [
+  { id:'C001', name:'Priya', note:'affluent, loyal, rich fit history' },
+  { id:'C002', name:'Aditi',  note:'value-seeking, new, no fit consent' },
+  { id:'C003', name:'Meera', note:'free tier, third styling session' },
+];
+
+let customerId = 'C001';
+let sessionId = 'shop-' + customerId + '-' + Date.now();
+let currentView = 'shop';
+let cartCount = 0;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function ask(text){
+  try {
+    const r = await fetch(`/session/${sessionId}/message`, {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ customerId, text })
+    });
+    return await r.json();
+  } catch (e) {
+    return { error:'unreachable', reply:'The shop backend is not reachable. Start the stack with npm run dev.' };
+  }
+}
+
+function resetPersonaState(){
+  cartCount = 0; $('cartCount').textContent = '0';
+  $('tierBadge').textContent = 'Sign in to see your tier';
+  $('grid').innerHTML = '<p class="empty">Search for something, or pick a category, to see personalised results.</p>';
+  $('blurb').innerHTML = '';
+  $('search').value = '';
+  $('profileBody').innerHTML = '<p class="empty">Switch to this tab to load your profile.</p>';
+  $('subBody').innerHTML = '<p class="empty">Switch to this tab to load your plan.</p>';
+  $('loyaltyBody').innerHTML = '<p class="empty">Simulate a purchase to see your balance and tier progress.</p>';
+  $('redeemResult').innerHTML = '';
+  $('overlay').classList.remove('open');
+}
+
+function renderPersonas(){
+  $('personas').innerHTML = PERSONAS.map(p =>
+    `<button class="persona" data-id="${p.id}" aria-pressed="${p.id===customerId}" title="${esc(p.note)}">${esc(p.name)}</button>`
+  ).join('');
+  document.querySelectorAll('.persona').forEach(b => b.onclick = () => {
+    customerId = b.dataset.id;
+    sessionId = 'shop-' + customerId + '-' + Date.now();
+    resetPersonaState();
+    renderPersonas();
+  });
+}
+
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  currentView = b.dataset.view;
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('active', x === b));
+  $('view-shop').style.display = currentView === 'shop' ? '' : 'none';
+  $('view-account').style.display = currentView === 'account' ? '' : 'none';
+});
+
+renderPersonas();
+</script>
+</body>
+</html>
