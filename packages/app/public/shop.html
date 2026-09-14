@@ -6,117 +6,151 @@
 <title>Neu.Tail — Shop</title>
 <style>
   :root{
-    --ink:#101A3D; --paper:#fff; --rule:#DBDFEC; --mute:#5E6684;
-    --front:#F4F6FB; --violet:#5B4B9E; --teal:#0E7C7B; --coral:#D9451F; --amber:#8A6A12;
+    --ink:#101014; --paper:#fff; --rule:#E4E4E7; --mute:#71717A;
+    --front:#FAFAFA; --accent:#5B4B9E; --warn-bg:#FBEFE9;
   }
   *{box-sizing:border-box}
-  body{margin:0;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--front)}
-  header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--rule);padding:14px 22px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;z-index:10}
-  .brand{font-weight:700;font-size:17px;letter-spacing:-.01em}
-  nav.tabs{display:flex;gap:4px}
-  nav.tabs button{border:0;background:transparent;padding:8px 12px;border-radius:7px;font:inherit;font-size:13.5px;color:var(--mute);cursor:pointer}
-  nav.tabs button.active{background:var(--front);color:var(--ink);font-weight:600}
-  .personas{display:flex;gap:6px}
-  .persona{border:1px solid var(--rule);background:#fff;border-radius:999px;padding:5px 11px;cursor:pointer;font-size:12.5px;color:var(--ink)}
-  .persona[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .spacer{flex:1}
-  .badge-pill{border:1px solid var(--rule);border-radius:999px;padding:5px 11px;font-size:12.5px;color:var(--mute);white-space:nowrap}
-  .cart{border:1px solid var(--rule);border-radius:999px;padding:5px 11px;font-size:13px;white-space:nowrap}
-  .link-out{font-size:12.5px;color:var(--violet);text-decoration:none;white-space:nowrap}
-  main{max-width:1040px;margin:0 auto;padding:24px 22px 60px}
-  .hero{display:flex;gap:10px;margin-bottom:18px}
-  .hero input{flex:1;border:1px solid var(--rule);border-radius:10px;padding:12px 15px;font:inherit}
-  .hero button{border:0;background:var(--ink);color:#fff;border-radius:10px;padding:12px 20px;font:inherit;cursor:pointer}
-  .pills{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:20px}
-  .pill{border:1px solid var(--rule);background:#fff;border-radius:999px;padding:6px 13px;font-size:12.5px;cursor:pointer;color:var(--mute)}
-  .pill:hover{color:var(--ink)}
-  .blurb{background:#fff;border:1px solid var(--rule);border-radius:10px;padding:13px 16px;margin-bottom:18px;font-size:13.5px;color:var(--mute)}
-  .blurb b{color:var(--ink)}
-  .why{color:var(--violet);cursor:pointer;font-size:12.5px;display:inline-block;margin-top:6px}
-  .why-body{display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--rule);font-size:12.5px;color:var(--mute)}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--paper)}
+  .caps{text-transform:uppercase;letter-spacing:.09em}
+
+  header{border-bottom:1px solid var(--rule);padding:18px 24px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+  .nav-left{display:flex;gap:22px;align-items:center}
+  .nav-left button{border:0;background:none;font:inherit;font-size:12px;font-weight:600;color:var(--mute);cursor:pointer;padding:0}
+  .nav-left button.active{color:var(--ink)}
+  .brand{text-align:center;font-size:19px;font-weight:700;letter-spacing:.03em}
+  .nav-right{display:flex;gap:18px;align-items:center;justify-content:flex-end;font-size:12px;font-weight:600;position:relative}
+  .nav-right button{border:0;background:none;font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;padding:0}
+  .nav-right .muted{color:var(--mute);font-weight:500}
+  .account-menu{position:absolute;top:26px;right:0;background:#fff;border:1px solid var(--rule);border-radius:10px;
+    box-shadow:0 8px 24px rgba(0,0,0,.08);min-width:170px;padding:6px;display:none;z-index:30}
+  .account-menu.open{display:block}
+  .account-menu button{display:block;width:100%;text-align:left;padding:9px 10px;border-radius:6px;font-size:12.5px;font-weight:500;color:var(--ink)}
+  .account-menu button:hover{background:var(--front)}
+  .account-menu .divider{border-top:1px solid var(--rule);margin:5px 2px}
+
+  @media (max-width:640px){
+    header{grid-template-columns:auto auto;justify-content:space-between;row-gap:10px}
+    .brand{grid-column:1/3;order:-1;text-align:left;font-size:16px}
+    .nav-right .muted{display:none}
+  }
+
+  main{max-width:1100px;margin:0 auto;padding:28px 24px 70px}
+
+  .search-row{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--ink);padding-bottom:10px;margin-bottom:22px}
+  .search-row svg{flex:0 0 auto;opacity:.5}
+  .search-row input{flex:1;border:0;outline:0;font:inherit;font-size:15px;padding:4px 0}
+  .search-row button{border:0;background:none;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+
+  .trending{margin-bottom:28px}
+  .trending .label{font-size:11px;color:var(--mute);margin-bottom:9px}
+  .chips{display:flex;flex-wrap:wrap;gap:16px 18px}
+  .chip{border:0;background:none;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;padding:0}
+  .chip:hover{color:var(--accent)}
+
+  .section-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .section-head h2{font-size:12px;margin:0}
+  .section-head .count{font-size:12px;color:var(--mute)}
+  .blurb{font-size:12.5px;color:var(--mute);margin-bottom:20px;max-width:70ch}
+  .blurb b{color:var(--ink);font-weight:600}
+  .why{color:var(--accent);cursor:pointer;font-weight:600;display:inline-block;margin-top:4px}
+  .why-body{display:none;margin-top:6px}
   .why-body.open{display:block}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
-  .card{background:#fff;border:1px solid var(--rule);border-radius:12px;overflow:hidden;cursor:pointer;text-align:left;padding:0;font:inherit;color:inherit}
-  .card .ph{height:140px;display:flex;align-items:center;justify-content:center;font-size:34px}
-  .card .body{padding:11px 12px}
-  .card .brand{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
-  .card .title{font-size:13.5px;font-weight:600;margin:2px 0 6px}
-  .card .price{font-weight:700}
-  .card .meta{font-size:11.5px;color:var(--mute);margin-top:4px}
-  .empty{color:var(--mute);font-size:13.5px}
 
-  .overlay{position:fixed;inset:0;background:rgba(16,26,61,.4);display:none;align-items:center;justify-content:center;padding:20px;z-index:20}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:20px 16px}
+  .card{background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+  .card .ph{position:relative;aspect-ratio:3/4;background:var(--front);display:flex;align-items:center;justify-content:center;font-size:44px;overflow:hidden}
+  .card .ph img{width:100%;height:100%;object-fit:cover}
+  .badge{position:absolute;top:9px;left:9px;background:var(--ink);color:#fff;font-size:9.5px;font-weight:700;letter-spacing:.05em;padding:4px 7px;text-transform:uppercase}
+  .save{position:absolute;top:8px;right:8px;width:26px;height:26px;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px}
+  .card .body{padding-top:9px}
+  .card .brand{font-size:10.5px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em}
+  .card .title{font-size:13px;font-weight:500;margin:2px 0 4px}
+  .card .price{font-weight:700;font-size:13px}
+  .card .meta{font-size:11px;color:var(--mute);margin-top:2px}
+  .empty{color:var(--mute);font-size:13px}
+
+  .overlay{position:fixed;inset:0;background:rgba(16,16,20,.45);display:none;align-items:flex-start;justify-content:center;padding:40px 20px;overflow:auto;z-index:40}
   .overlay.open{display:flex}
-  .panel{background:#fff;border-radius:14px;max-width:480px;width:100%;max-height:88vh;overflow:auto;padding:22px;position:relative}
-  .panel .ph{height:180px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:52px;margin-bottom:14px}
-  .close{position:absolute;top:14px;right:16px;border:0;background:none;font-size:20px;cursor:pointer;color:var(--mute)}
-  .size-row{display:flex;gap:7px;margin:12px 0}
-  .size-chip{border:1px solid var(--rule);border-radius:8px;padding:8px 13px;font-size:13px}
-  .size-chip.rec{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
-  .result-box{background:var(--front);border-radius:10px;padding:12px 14px;margin-top:12px;font-size:13.5px}
-  .result-box.warn{background:#FBEFE9}
-  .actions{display:flex;gap:9px;margin-top:16px}
-  .btn{border:0;border-radius:9px;padding:11px 16px;font:inherit;cursor:pointer}
-  .btn.primary{background:var(--ink);color:#fff}
-  .btn.ghost{background:#fff;border:1px solid var(--rule);color:var(--ink)}
+  .panel{background:#fff;max-width:760px;width:100%;position:relative;display:grid;grid-template-columns:1fr 1fr}
+  @media (max-width:640px){.panel{grid-template-columns:1fr}}
+  .close{position:absolute;top:14px;right:16px;border:0;background:none;font-size:22px;cursor:pointer;z-index:2}
+  .panel .ph{background:var(--front);display:flex;align-items:center;justify-content:center;font-size:80px;min-height:320px}
+  .pd-info{padding:30px}
+  .pd-info .brand{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+  .pd-info h2{font-size:19px;font-weight:500;margin:4px 0 8px}
+  .pd-info .price{font-size:16px;font-weight:700;margin-bottom:4px}
+  .pd-info .meta{font-size:12px;color:var(--mute);margin-bottom:20px}
+  .size-label{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:8px}
+  .size-label .caps{color:var(--mute)}
+  .ai-tag{font-size:11px;color:var(--accent);font-weight:600}
+  .size-row{display:flex;gap:8px;margin-bottom:6px}
+  .size-box{border:1px solid var(--rule);background:#fff;width:44px;height:40px;font-size:12.5px;font-weight:600;cursor:pointer;position:relative}
+  .size-box.selected{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .size-box.ai-pick{border:2px solid var(--accent)}
+  .size-note{font-size:11.5px;color:var(--mute);margin:8px 0 18px;min-height:14px}
+  .size-note.warn{color:var(--ink)}
+  .why-fit{color:var(--accent);cursor:pointer;font-weight:600}
+  .btn{border:0;padding:13px 16px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;width:100%}
+  .btn.primary{background:var(--ink);color:#fff;text-transform:uppercase;letter-spacing:.06em}
+  .btn.ghost{background:#fff;border:1px solid var(--rule);color:var(--ink);text-transform:uppercase;letter-spacing:.06em;margin-top:8px}
 
-  .cards-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .signin-panel{max-width:420px;padding:34px}
+  .signin-panel h2{font-size:16px;margin:0 0 4px}
+  .signin-panel .sub{font-size:12.5px;color:var(--mute);margin-bottom:22px}
+  .acct-tile{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--rule);padding:14px 16px;margin-bottom:10px;cursor:pointer}
+  .acct-tile:hover{border-color:var(--ink)}
+  .acct-tile .name{font-weight:600;font-size:13.5px}
+  .acct-tile .note{font-size:11.5px;color:var(--mute);margin-top:2px}
+  .acct-tile .arrow{color:var(--mute)}
+  .guest-link{text-align:center;font-size:12.5px;color:var(--mute);margin-top:14px}
+  .guest-link button{border:0;background:none;font:inherit;color:var(--accent);font-weight:600;cursor:pointer;padding:0}
+
+  .cards-2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule);border:1px solid var(--rule);margin-bottom:1px}
   @media (max-width:700px){.cards-2{grid-template-columns:1fr}}
-  .acct-card{background:#fff;border:1px solid var(--rule);border-radius:12px;padding:18px;margin-bottom:16px}
-  .acct-card h3{margin:0 0 8px;font-size:14px}
-  .bar{height:8px;background:var(--front);border-radius:99px;overflow:hidden;margin:8px 0}
-  .bar > div{height:100%;background:var(--violet)}
-  .redeem-row{display:flex;gap:8px;margin-top:10px;align-items:center}
-  .redeem-row input{width:90px;border:1px solid var(--rule);border-radius:8px;padding:8px 10px;font:inherit}
+  .acct-card{background:#fff;padding:22px;border:1px solid var(--rule);border-top:0;margin-bottom:-1px}
+  .cards-2 .acct-card{border:0}
+  .acct-card h3{font-size:11px;margin:0 0 10px}
+  .bar{height:4px;background:var(--front);overflow:hidden;margin:10px 0}
+  .bar>div{height:100%;background:var(--accent)}
+  .redeem-row{display:flex;gap:8px;margin-top:12px}
+  .redeem-row input{width:90px;border:1px solid var(--rule);padding:9px 10px;font:inherit}
+  .redeem-row button{border:1px solid var(--ink);background:#fff;padding:9px 14px;font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.04em}
+  .gate{padding:40px 0;text-align:center}
+  .gate p{color:var(--mute);font-size:13px;margin-bottom:16px}
+  .gate button{border:0;background:var(--ink);color:#fff;padding:12px 22px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.06em}
 </style>
 </head>
 <body>
 <header>
-  <div class="brand">Neu.Tail</div>
-  <nav class="tabs" id="tabs">
-    <button data-view="shop" class="active">Shop</button>
-    <button data-view="account">Account</button>
+  <nav class="nav-left" id="tabs">
+    <button data-view="shop" class="caps active">Shop</button>
+    <button data-view="account" class="caps">Account</button>
   </nav>
-  <div class="personas" id="personas"></div>
-  <div class="spacer"></div>
-  <span class="badge-pill" id="tierBadge">Sign in to see your tier</span>
-  <span class="cart">Bag <b id="cartCount">0</b></span>
-  <a class="link-out" href="/index.html">View technical console →</a>
+  <div class="brand">NEU.TAIL</div>
+  <div class="nav-right">
+    <a href="/index.html" class="muted" style="text-decoration:none">Technical console</a>
+    <span id="authArea"></span>
+    <button id="cartBtn">Bag (<span id="cartCount">0</span>)</button>
+  </div>
 </header>
 
 <main>
   <section id="view-shop">
-    <div class="hero">
+    <div class="search-row">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input type="text" id="search" placeholder="Search for anything..." autocomplete="off">
-      <button id="searchBtn">Search</button>
+      <button id="searchBtn" class="caps">Search</button>
     </div>
-    <div class="pills" id="pills"></div>
+    <div class="trending">
+      <div class="label caps">Trending</div>
+      <div class="chips" id="pills"></div>
+    </div>
+    <div id="resultsHead"></div>
     <div id="blurb"></div>
-    <div class="grid" id="grid"><p class="empty">Search for something, or pick a category, to see personalised results.</p></div>
+    <div class="grid" id="grid"><p class="empty">Search for something, or pick a trending term, to see results personalised to you.</p></div>
   </section>
 
-  <section id="view-account" style="display:none">
-    <div class="cards-2">
-      <div class="acct-card">
-        <h3>Profile</h3>
-        <div id="profileBody" class="empty">Switch to this tab to load your profile.</div>
-      </div>
-      <div class="acct-card">
-        <h3>Subscription</h3>
-        <div id="subBody" class="empty">Switch to this tab to load your plan.</div>
-      </div>
-    </div>
-    <div class="acct-card">
-      <h3>Loyalty points</h3>
-      <div id="loyaltyBody" class="empty">Simulate a purchase to see your balance and tier progress.</div>
-      <button class="btn ghost" id="simPurchase">Simulate a purchase</button>
-      <div class="redeem-row">
-        <input type="number" id="redeemAmt" placeholder="Points" min="0">
-        <button class="btn ghost" id="redeemBtn">Redeem</button>
-      </div>
-      <div id="redeemResult"></div>
-    </div>
-  </section>
+  <section id="view-account" style="display:none"></section>
 </main>
 
 <div class="overlay" id="overlay">
@@ -125,18 +159,21 @@
 
 <script>
 const PERSONAS = [
-  { id:'C001', name:'Priya', note:'affluent, loyal, rich fit history' },
-  { id:'C002', name:'Aditi',  note:'value-seeking, new, no fit consent' },
-  { id:'C003', name:'Meera', note:'free tier, third styling session' },
+  { id:'C001', name:'Priya', note:'Affluent, loyal, rich fit history' },
+  { id:'C002', name:'Aditi',  note:'Value-seeking, new, no fit consent' },
+  { id:'C003', name:'Meera', note:'Free tier, third styling session' },
 ];
+const GUEST_ID = 'C000';
 
-let customerId = 'C001';
+let customerId = GUEST_ID;
 let sessionId = 'shop-' + customerId + '-' + Date.now();
 let currentView = 'shop';
 let cartCount = 0;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const personaOf = id => PERSONAS.find(p => p.id === id) || null;
+const isSignedIn = () => customerId !== GUEST_ID;
 
 async function ask(text){
   try {
@@ -150,30 +187,58 @@ async function ask(text){
   }
 }
 
-function resetPersonaState(){
+function switchTo(id){
+  customerId = id;
+  sessionId = 'shop-' + customerId + '-' + Date.now();
   cartCount = 0; $('cartCount').textContent = '0';
-  $('tierBadge').textContent = 'Sign in to see your tier';
-  $('grid').innerHTML = '<p class="empty">Search for something, or pick a category, to see personalised results.</p>';
-  $('blurb').innerHTML = '';
+  $('grid').innerHTML = '<p class="empty">Search for something, or pick a trending term, to see results personalised to you.</p>';
+  $('blurb').innerHTML = ''; $('resultsHead').innerHTML = '';
   $('search').value = '';
-  $('profileBody').innerHTML = '<p class="empty">Switch to this tab to load your profile.</p>';
-  $('subBody').innerHTML = '<p class="empty">Switch to this tab to load your plan.</p>';
-  $('loyaltyBody').innerHTML = '<p class="empty">Simulate a purchase to see your balance and tier progress.</p>';
-  $('redeemResult').innerHTML = '';
   $('overlay').classList.remove('open');
-  if (currentView === 'account') loadAccount();
+  renderAuthArea();
+  if (currentView === 'account') renderAccountView();
 }
 
-function renderPersonas(){
-  $('personas').innerHTML = PERSONAS.map(p =>
-    `<button class="persona" data-id="${p.id}" aria-pressed="${p.id===customerId}" title="${esc(p.note)}">${esc(p.name)}</button>`
-  ).join('');
-  document.querySelectorAll('.persona').forEach(b => b.onclick = () => {
-    customerId = b.dataset.id;
-    sessionId = 'shop-' + customerId + '-' + Date.now();
-    resetPersonaState();
-    renderPersonas();
-  });
+function renderAuthArea(){
+  const p = personaOf(customerId);
+  if (!p) {
+    $('authArea').innerHTML = `<button id="signInBtn" class="caps">Sign In</button>`;
+    $('signInBtn').onclick = openSignIn;
+    return;
+  }
+  $('authArea').innerHTML = `
+    <button id="acctToggle">${esc(p.name)} ▾</button>
+    <div class="account-menu" id="acctMenu">
+      ${PERSONAS.filter(x => x.id !== p.id).map(x => `<button data-switch="${x.id}">Switch to ${esc(x.name)}</button>`).join('')}
+      <div class="divider"></div>
+      <button id="signOutBtn">Sign out</button>
+    </div>`;
+  $('acctToggle').onclick = () => $('acctMenu').classList.toggle('open');
+  document.querySelectorAll('[data-switch]').forEach(b => b.onclick = () => { $('acctMenu').classList.remove('open'); switchTo(b.dataset.switch); });
+  $('signOutBtn').onclick = () => { $('acctMenu').classList.remove('open'); switchTo(GUEST_ID); };
+}
+document.addEventListener('click', e => {
+  const menu = $('acctMenu'); const toggle = $('acctToggle');
+  if (menu && menu.classList.contains('open') && !menu.contains(e.target) && e.target !== toggle) menu.classList.remove('open');
+});
+
+function openSignIn(){
+  $('panelBody').innerHTML = `
+    <div class="signin-panel">
+      <button class="close" id="closeOverlay">×</button>
+      <h2>Sign in</h2>
+      <div class="sub">Choose a demo account to see personalisation in action.</div>
+      ${PERSONAS.map(p => `
+        <div class="acct-tile" data-tile="${p.id}">
+          <div><div class="name">${esc(p.name)}</div><div class="note">${esc(p.note)}</div></div>
+          <div class="arrow">→</div>
+        </div>`).join('')}
+      <div class="guest-link">or <button id="continueGuest">continue browsing as a guest</button></div>
+    </div>`;
+  $('overlay').classList.add('open');
+  $('closeOverlay').onclick = () => $('overlay').classList.remove('open');
+  document.querySelectorAll('[data-tile]').forEach(t => t.onclick = () => { $('overlay').classList.remove('open'); switchTo(t.dataset.tile); });
+  $('continueGuest').onclick = () => $('overlay').classList.remove('open');
 }
 
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
@@ -181,17 +246,19 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
   document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('active', x === b));
   $('view-shop').style.display = currentView === 'shop' ? '' : 'none';
   $('view-account').style.display = currentView === 'account' ? '' : 'none';
+  if (currentView === 'account') renderAccountView();
 });
 
-renderPersonas();
+renderAuthArea();
+</script>
 
-const CATEGORY_PILLS = ['occasion dress','coat','jumper','trousers','trainers'];
+<script>
+const TRENDING = ['Occasion dress','Winter coat','Knit jumper','Work trousers','Trainers'];
 const CAT_ICON = { dresses:'👗', outerwear:'🧥', knitwear:'🧶', trousers:'👖', tops:'👕', skirts:'👗', footwear:'👟', accessories:'👜' };
-const CAT_COLOR = { dresses:'#F3E8FF', outerwear:'#E6F3F2', knitwear:'#FBEFE9', trousers:'#EAF0FB', tops:'#F4F6FB', skirts:'#FDF2E9', footwear:'#EFEFEF', accessories:'#F7EAF0' };
 let lastProducts = [];
 
-$('pills').innerHTML = CATEGORY_PILLS.map(c => `<button class="pill">${esc(c)}</button>`).join('');
-document.querySelectorAll('.pill').forEach(p => p.onclick = () => { $('search').value = 'show me a ' + p.textContent; runSearch(); });
+$('pills').innerHTML = TRENDING.map(c => `<button class="chip">${esc(c)}</button>`).join('');
+document.querySelectorAll('.chip').forEach(p => p.onclick = () => { $('search').value = p.textContent; runSearch(); });
 $('searchBtn').onclick = runSearch;
 $('search').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
 
@@ -199,7 +266,7 @@ async function runSearch(){
   const text = $('search').value.trim();
   if (!text) return;
   $('grid').innerHTML = '<p class="empty">Searching…</p>';
-  $('blurb').innerHTML = '';
+  $('blurb').innerHTML = ''; $('resultsHead').innerHTML = '';
   const d = await ask(text);
   if (d.error) { $('grid').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
   if (d.intent !== 'discovery.rank' || !d.payload?.products) {
@@ -207,16 +274,21 @@ async function runSearch(){
     return;
   }
   lastProducts = d.payload.products;
+  $('resultsHead').innerHTML = `<div class="section-head"><h2 class="caps">Results</h2><span class="count">${d.payload.candidates} products</span></div>`;
   const mix = Object.entries(d.payload.price_tier_mix || {}).map(([t,n]) => `${n} ${t}`).join(', ');
-  $('blurb').innerHTML = `<div class="blurb"><b>Because of your shopping history</b> — ${esc(d.payload.rationale)}
+  $('blurb').innerHTML = `<div class="blurb"><b>Personalised for you</b> — ${esc(d.payload.rationale)}
     <div class="why" id="whyToggle">Why am I seeing this? ▾</div>
-    <div class="why-body" id="whyBody">Ranked ${d.payload.candidates} eligible products for you; the top 5 mix is ${esc(mix)}.</div>
+    <div class="why-body" id="whyBody">Ranked ${d.payload.candidates} eligible products; the top 5 mix is ${esc(mix)}.</div>
   </div>`;
   $('whyToggle').onclick = () => $('whyBody').classList.toggle('open');
   if (!lastProducts.length) { $('grid').innerHTML = '<p class="empty">No stocked products matched that search.</p>'; return; }
   $('grid').innerHTML = lastProducts.map((p,i) => `
     <button class="card" data-i="${i}">
-      <div class="ph" style="background:${CAT_COLOR[p.category] || '#F4F6FB'}">${CAT_ICON[p.category] || '🛍️'}</div>
+      <div class="ph">
+        ${i === 0 ? '<span class="badge">Top pick</span>' : ''}
+        <span class="save">♡</span>
+        ${CAT_ICON[p.category] || '🛍️'}
+      </div>
       <div class="body">
         <div class="brand">${esc(p.brand)}</div>
         <div class="title">${esc(p.title)}</div>
@@ -226,100 +298,113 @@ async function runSearch(){
     </button>`).join('');
   document.querySelectorAll('#grid .card').forEach(c => c.onclick = () => openProduct(lastProducts[+c.dataset.i]));
 }
+</script>
 
+<script>
 function openProduct(p){
   $('panelBody').innerHTML = `
     <button class="close" id="closeOverlay">×</button>
-    <div class="ph" style="background:${CAT_COLOR[p.category] || '#F4F6FB'}">${CAT_ICON[p.category] || '🛍️'}</div>
-    <div class="brand">${esc(p.brand)}</div>
-    <h2 style="margin:2px 0 6px;font-size:18px">${esc(p.title)}</h2>
-    <div class="price" style="font-size:17px">£${p.price_gbp}</div>
-    <div class="meta">★ ${p.rating} · ${p.stock > 8 ? 'In stock' : p.stock > 0 ? 'Low stock' : 'Out of stock'}</div>
-    <div class="size-row" id="sizeRow">${['XS','S','M','L','XL'].map(s => `<span class="size-chip">${s}</span>`).join('')}</div>
-    <div class="actions">
-      <button class="btn ghost" id="checkFit">Check my size</button>
+    <div class="ph">${CAT_ICON[p.category] || '🛍️'}</div>
+    <div class="pd-info">
+      <div class="brand">${esc(p.brand)}</div>
+      <h2>${esc(p.title)}</h2>
+      <div class="price">£${p.price_gbp}</div>
+      <div class="meta">★ ${p.rating} · ${p.stock > 8 ? 'In stock' : p.stock > 0 ? 'Low stock' : 'Out of stock'}</div>
+      <div class="size-label"><span class="caps">Size</span><span id="aiTag" class="ai-tag"></span></div>
+      <div class="size-row" id="sizeRow">${['XS','S','M','L','XL'].map(s => `<button class="size-box" data-size="${s}">${s}</button>`).join('')}</div>
+      <div class="size-note" id="sizeNote">Finding your size…</div>
       <button class="btn primary" id="addBag">Add to bag</button>
     </div>
-    <div id="fitResult"></div>
   `;
   $('overlay').classList.add('open');
   $('closeOverlay').onclick = () => $('overlay').classList.remove('open');
+  document.querySelectorAll('#sizeRow .size-box').forEach(box => box.onclick = () => {
+    document.querySelectorAll('#sizeRow .size-box').forEach(b => b.classList.remove('selected'));
+    box.classList.add('selected');
+  });
   $('addBag').onclick = () => { cartCount++; $('cartCount').textContent = String(cartCount); };
-  $('checkFit').onclick = async () => {
-    $('fitResult').innerHTML = '<p class="empty">Checking…</p>';
-    const d = await ask(`what size should I get for ${p.sku}?`);
-    if (d.error) { $('fitResult').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
+
+  // Fetch the AI's size recommendation automatically - no button required.
+  ask(`what size should I get for ${p.sku}?`).then(d => {
+    if (d.error) { $('sizeNote').textContent = ''; return; }
     const f = d.payload || {};
     if (f.abstained) {
-      $('fitResult').innerHTML = `<div class="result-box warn">${esc(f.explanation)}
-        <div class="why" id="whyFit">Why? ▾</div>
-        <div class="why-body" id="whyFitBody">${esc(JSON.stringify(f.evidence || {}))}</div></div>`;
+      $('sizeNote').innerHTML = `${esc(f.explanation)} <span class="why-fit" id="whyFit">Why? ▾</span><div class="why-body" id="whyFitBody">${esc(JSON.stringify(f.evidence || {}))}</div>`;
     } else {
-      document.querySelectorAll('#sizeRow .size-chip').forEach(chip => {
-        if (chip.textContent === f.recommended_size) chip.classList.add('rec');
+      $('aiTag').textContent = `AI pick: ${f.recommended_size} · ${f.confidence}%`;
+      document.querySelectorAll('#sizeRow .size-box').forEach(box => {
+        if (box.dataset.size === f.recommended_size) box.classList.add('ai-pick');
       });
-      const stockNote = f.size_in_stock === false ? ' Currently out of stock in that size.' : '';
-      $('fitResult').innerHTML = `<div class="result-box">Recommended size <b>${esc(f.recommended_size)}</b> at ${f.confidence}% confidence. ${esc(f.explanation)}${esc(stockNote)}
-        <div class="why" id="whyFit">Why? ▾</div>
-        <div class="why-body" id="whyFitBody">Grading offset ${f.evidence?.grading_delta_cm}cm · ${f.evidence?.observations} kept purchases in this category · brand cut ${esc(String(f.evidence?.brand_cut || ''))}</div></div>`;
+      $('sizeNote').innerHTML = `${esc(f.explanation)} <span class="why-fit" id="whyFit">Why? ▾</span><div class="why-body" id="whyFitBody">Grading offset ${f.evidence?.grading_delta_cm}cm · ${f.evidence?.observations} kept purchases · brand cut ${esc(String(f.evidence?.brand_cut || ''))}</div>`;
     }
-    $('whyFit').onclick = () => $('whyFitBody').classList.toggle('open');
-  };
+    const whyFit = $('whyFit');
+    if (whyFit) whyFit.onclick = () => $('whyFitBody').classList.toggle('open');
+  });
 }
+</script>
 
-async function loadAccount(){
-  $('profileBody').innerHTML = '<p class="empty">Loading your profile…</p>';
-  $('subBody').innerHTML = '<p class="empty">Loading…</p>';
+<script>
+async function renderAccountView(){
+  if (!isSignedIn()) {
+    $('view-account').innerHTML = `
+      <div class="gate">
+        <p>Sign in to view your profile, subscription and loyalty points.</p>
+        <button id="gateSignIn" class="caps">Sign In</button>
+      </div>`;
+    $('gateSignIn').onclick = openSignIn;
+    return;
+  }
+  $('view-account').innerHTML = `
+    <div class="cards-2">
+      <div class="acct-card"><h3 class="caps">Profile</h3><div id="profileBody" class="empty">Loading…</div></div>
+      <div class="acct-card"><h3 class="caps">Subscription</h3><div id="subBody" class="empty">Loading…</div></div>
+    </div>
+    <div class="acct-card">
+      <h3 class="caps">Loyalty points</h3>
+      <div id="loyaltyBody" class="empty">Simulate a purchase to see your balance and tier progress.</div>
+      <button class="btn ghost" id="simPurchase">Simulate a purchase</button>
+      <div class="redeem-row">
+        <input type="number" id="redeemAmt" placeholder="Points" min="0">
+        <button id="redeemBtn">Redeem</button>
+      </div>
+      <div id="redeemResult"></div>
+    </div>`;
 
   const p = await ask('who am I');
-  if (p.error) { $('profileBody').innerHTML = `<p class="empty">${esc(p.reply)}</p>`; }
-  else {
-    const seg = p.payload?.segment;
-    if (seg) {
-      $('profileBody').innerHTML = `<div>${esc(String(seg.affluence).replace('_',' '))} · ${esc(seg.loyalty_status)}
-        <div class="meta">Tier ${esc(seg.tier)} · ${seg.evidence.orders} orders · ${seg.evidence.tenure_days} days as a customer</div></div>`;
-      $('tierBadge').textContent = `${seg.tier} tier`;
-    } else {
-      $('profileBody').innerHTML = `<p class="empty">${esc(p.reply || 'Could not load profile.')}</p>`;
-    }
+  if (!p.error && p.payload?.segment) {
+    const seg = p.payload.segment;
+    $('profileBody').innerHTML = `<div>${esc(String(seg.affluence).replace('_',' '))} · ${esc(seg.loyalty_status)}
+      <div class="meta">Tier ${esc(seg.tier)} · ${seg.evidence.orders} orders · ${seg.evidence.tenure_days} days as a customer</div></div>`;
   }
 
   const u = await ask('tell me about the styling advisory plan');
-  if (u.error) { $('subBody').innerHTML = `<p class="empty">${esc(u.reply)}</p>`; return; }
-  if (u.payload?.offer) {
+  if (u.error) { $('subBody').innerHTML = `<p class="empty">${esc(u.reply)}</p>`; }
+  else if (u.payload?.offer) {
     $('subBody').innerHTML = `<p>${esc(u.payload.offer.copy)}</p>
       <button class="btn primary" id="acceptOffer">Accept · £${u.payload.offer.price_gbp_month}/mo</button>`;
-    $('acceptOffer').onclick = async () => {
-      const a = await ask('accept');
-      $('subBody').innerHTML = `<p>${esc(a.reply)}</p>`;
-    };
+    $('acceptOffer').onclick = async () => { const a = await ask('accept'); $('subBody').innerHTML = `<p>${esc(a.reply)}</p>`; };
   } else {
     $('subBody').innerHTML = `<p class="empty">${esc(u.reply)}</p>`;
   }
+
+  $('simPurchase').onclick = async () => {
+    $('loyaltyBody').innerHTML = '<p class="empty">Recording purchase…</p>';
+    const d = await ask('how many points did I earn?');
+    if (d.error) { $('loyaltyBody').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
+    const r = d.payload || {};
+    const pct = r.tier === 'Platinum' ? 100 : Math.max(4, 100 - Math.min(100, (r.points_to_next_tier || 0) / 20));
+    $('loyaltyBody').innerHTML = `<p>${esc(r.nudge || d.reply)}</p>
+      <div class="bar"><div style="width:${pct}%"></div></div>
+      <div class="meta">Balance ${r.balance} · Tier ${esc(r.tier || '')}</div>`;
+  };
+
+  $('redeemBtn').onclick = async () => {
+    const n = $('redeemAmt').value;
+    if (!n) return;
+    const d = await ask(`redeem ${n}`);
+    $('redeemResult').innerHTML = `<p class="meta">${esc(d.reply)}</p>`;
+  };
 }
-
-document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
-  if (b.dataset.view === 'account') loadAccount();
-}));
-
-$('simPurchase').onclick = async () => {
-  $('loyaltyBody').innerHTML = '<p class="empty">Recording purchase…</p>';
-  const d = await ask('how many points did I earn?');
-  if (d.error) { $('loyaltyBody').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
-  const r = d.payload || {};
-  const pct = r.tier === 'Platinum' ? 100 : Math.max(4, 100 - Math.min(100, (r.points_to_next_tier || 0) / 20));
-  $('loyaltyBody').innerHTML = `<p>${esc(r.nudge || d.reply)}</p>
-    <div class="bar"><div style="width:${pct}%"></div></div>
-    <div class="meta">Balance ${r.balance} · Tier ${esc(r.tier || '')}</div>`;
-  if (r.tier) $('tierBadge').textContent = `${r.tier} tier`;
-};
-
-$('redeemBtn').onclick = async () => {
-  const n = $('redeemAmt').value;
-  if (!n) return;
-  const d = await ask(`redeem ${n}`);
-  $('redeemResult').innerHTML = `<p class="meta">${esc(d.reply)}</p>`;
-};
 </script>
 </body>
 </html>
