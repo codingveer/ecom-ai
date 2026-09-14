@@ -101,6 +101,14 @@ const PERSONAS = [
   { id:'C003', name:'Meera Iyer', email:'meera.iyer@example.com', city:'Manchester', affluence:'mid',
     tenure:14, orders:9, fit:'rich', consentFit:1, sub:'free', styling:3,
     note:'UPSELL TRIGGER. Third free Styling Advisory session -> Plus offer -> 2x loyalty accrual.' },
+  // Appended last, not inserted earlier: its declared* fields below are fixed literals
+  // rather than spendFor/aupFor/premFor, and every count here is 0, so it draws zero
+  // extra numbers from the shared PRNG - C001/C002/C003's own generated data (and every
+  // number quoted about them in README.md/DEMO.md) is unaffected by this entry existing.
+  { id:'C000', name:'Guest Visitor', email:'guest@example.com', city:'London', affluence:'value_seeking',
+    tenure:0, orders:0, fit:'none', consentFit:0, sub:'free', styling:0,
+    declaredSpend:180, declaredAup:22, declaredPremium:0.04,
+    note:'GUEST. No order or fit history - a brand-new anonymous visitor. Thin-history ranking, fit agent abstains, no subscription/loyalty offer until signed in.' },
 ];
 const NAMES = ['Nisha Kapoor','Tom Whitfield','Grace Okoro','Dan Lawson','Aiko Tanaka','Ravi Menon','Sofia Duarte',
  'Callum Reid','Elena Petrova','Marcus Bell','Hana Yilmaz','Jonah Price','Leila Haddad','Owen Shaw','Freya Lindqvist',
@@ -118,8 +126,10 @@ const customers: Cust[] = [];
 const cRows: unknown[][] = [], lRows: unknown[][] = [], sRows: unknown[][] = [];
 for (const p of PERSONAS) {
   const lifetime = p.affluence === 'affluent' ? 6400 : p.affluence === 'mid' ? 2100 : 210;
-  cRows.push([p.id, p.name, p.email, p.city, daysAgo(p.tenure*30), spendFor(p.affluence),
-    aupFor(p.affluence), premFor(p.affluence), p.consentFit, 1, p.note]);
+  cRows.push([p.id, p.name, p.email, p.city, daysAgo(p.tenure*30),
+    p.declaredSpend ?? spendFor(p.affluence),
+    p.declaredAup ?? aupFor(p.affluence),
+    p.declaredPremium ?? premFor(p.affluence), p.consentFit, 1, p.note]);
   lRows.push([p.id, tierFor(lifetime), Math.round(lifetime*0.35), lifetime,
     p.affluence === 'affluent' ? 0.84 : p.affluence === 'mid' ? 0.58 : 0.21,
     lifetime > 4500 ? 9000 - lifetime : 4500 - lifetime]);
