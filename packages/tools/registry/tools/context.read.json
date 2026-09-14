@@ -1,0 +1,26 @@
+{
+  "name": "context.read",
+  "version": "1.0.0",
+  "purpose": "Read the customer's long-term (cross-session) agent memory.",
+  "allowed_agents": [
+    "profiling",
+    "discovery",
+    "fit",
+    "upsell",
+    "loyalty"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "context": "object"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/context/{customer_id}"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "customer.profile.get",
+  "version": "1.0.0",
+  "purpose": "Load the enriched Customer 360 profile: identity, loyalty, transaction and returns history.",
+  "allowed_agents": [
+    "profiling"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true,
+      "description": "Customer identifier"
+    }
+  },
+  "output_schema": {
+    "identity": "object",
+    "loyalty": "object",
+    "transactions": "object",
+    "returns": "object",
+    "consent": "object"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/customers/{customer_id}/profile"
+  }
+}

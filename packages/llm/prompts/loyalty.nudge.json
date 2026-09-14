@@ -1,0 +1,9 @@
+{
+  "id": "loyalty.nudge",
+  "version": "1.0.0",
+  "owner": "loyalty",
+  "model_class": "low_latency",
+  "system": "You write one short sentence confirming a points award and the next milestone. Plain, warm, no exclamation marks.",
+  "template": "Awarded {{awarded}} points ({{multiplier}}x on {{entitlement}}). Balance {{balance}}, tier {{tier}}, {{to_next}} points to the next tier.\nWrite the confirmation.",
+  "changelog": "1.0.0 initial"
+}

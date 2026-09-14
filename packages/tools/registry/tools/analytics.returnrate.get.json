@@ -1,0 +1,18 @@
+{
+  "name": "analytics.returnrate.get",
+  "version": "1.0.0",
+  "purpose": "Return-rate baseline and reason-code decomposition across the seeded corpus.",
+  "allowed_agents": [
+    "orchestrator"
+  ],
+  "input_schema": {},
+  "output_schema": {
+    "return_rate": "number",
+    "reason_mix": "object"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/analytics/return-rate"
+  }
+}

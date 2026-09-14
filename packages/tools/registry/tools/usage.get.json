@@ -1,0 +1,29 @@
+{
+  "name": "usage.get",
+  "version": "1.0.0",
+  "purpose": "Read free-tier feature usage, entitlement state and offer history.",
+  "allowed_agents": [
+    "upsell"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    },
+    "feature": {
+      "type": "string",
+      "required": false
+    }
+  },
+  "output_schema": {
+    "entitlement": "string",
+    "sessions": "integer",
+    "value_signals": "array",
+    "last_offer_at": "string"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/usage/{customer_id}"
+  }
+}

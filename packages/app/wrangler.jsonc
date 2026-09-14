@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "neutail-app",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+
+  // No d1_databases. The Worker running the five agents has no path to the database
+  // at all - the platform will not give it one. This is the strongest form of the
+  // "agents must never read the database directly" requirement.
+  "durable_objects": {
+    "bindings": [{ "name": "SESSION", "class_name": "SessionDO" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SessionDO"] }
+  ],
+  "services": [
+    { "binding": "TOOLS", "service": "neutail-tools" },
+    { "binding": "LLM", "service": "neutail-llm" }
+  ],
+  "assets": { "directory": "public", "binding": "ASSETS" }
+}

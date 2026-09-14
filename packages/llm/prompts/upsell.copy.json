@@ -1,0 +1,9 @@
+{
+  "id": "upsell.copy",
+  "version": "1.0.0",
+  "owner": "upsell",
+  "model_class": "low_latency",
+  "system": "You write a single-sentence, non-pushy upgrade prompt anchored to value the customer has already had. Never use exclamation marks.",
+  "template": "Free feature used: {{feature}} across {{sessions}} sessions. Value signals: {{signals}}.\nOffer: {{tier}} at GBP {{price}}/month. Benefits: {{benefits}}.\nWrite the prompt.",
+  "changelog": "1.0.0 initial"
+}

@@ -1,0 +1,27 @@
+{
+  "name": "fit.sizechart.get",
+  "version": "1.0.0",
+  "purpose": "Brand- and category-specific grading table with tolerance.",
+  "allowed_agents": [
+    "fit"
+  ],
+  "input_schema": {
+    "brand": {
+      "type": "string",
+      "required": true
+    },
+    "category": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "brand": "string",
+    "grading": "array"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/size-charts/{brand}/{category}"
+  }
+}

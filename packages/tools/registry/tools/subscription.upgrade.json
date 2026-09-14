@@ -1,0 +1,27 @@
+{
+  "name": "subscription.upgrade",
+  "version": "1.0.0",
+  "purpose": "Create or change a subscription and apply the entitlement.",
+  "allowed_agents": [
+    "upsell"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    },
+    "tier": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "tier": "string",
+    "entitlement_active": "boolean"
+  },
+  "transport": {
+    "service": "services",
+    "method": "POST",
+    "path": "/subscriptions/{customer_id}"
+  }
+}

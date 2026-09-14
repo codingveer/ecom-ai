@@ -1,0 +1,34 @@
+{
+  "name": "context.write",
+  "version": "1.0.0",
+  "purpose": "Write a key into long-term agent memory, visible to every agent in later sessions.",
+  "allowed_agents": [
+    "profiling",
+    "discovery",
+    "fit",
+    "upsell",
+    "loyalty"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    },
+    "key": {
+      "type": "string",
+      "required": true
+    },
+    "value": {
+      "type": "object",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "written": "boolean"
+  },
+  "transport": {
+    "service": "services",
+    "method": "POST",
+    "path": "/context/{customer_id}"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "customer.returns.get",
+  "version": "1.0.0",
+  "purpose": "Read a customer's returns history with reason codes.",
+  "allowed_agents": [
+    "profiling",
+    "fit"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "returns": "array"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/customers/{customer_id}/returns"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "fit.profile.get",
+  "version": "1.0.0",
+  "purpose": "Read the customer's fit profile, consent flag and fit-related return history.",
+  "allowed_agents": [
+    "fit",
+    "discovery"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "consent_fit": "boolean",
+    "profiles": "array",
+    "fit_returns": "array"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/fit/{customer_id}"
+  }
+}

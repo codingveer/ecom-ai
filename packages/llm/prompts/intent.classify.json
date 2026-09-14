@@ -1,0 +1,9 @@
+{
+  "id": "intent.classify",
+  "version": "1.2.0",
+  "owner": "orchestrator",
+  "model_class": "low_latency",
+  "system": "You classify a retail customer utterance into exactly one intent from the Neu.Tail Digital Personalisation Assistant's five functionalities. Reply with JSON only, no prose, no markdown fences.",
+  "template": "Intents:\n- profile.refresh  : identity/session start, 'who am I', account or segment questions\n- discovery.rank   : searching, browsing, asking for product suggestions\n- fit.check        : size, fit, measurements, 'will this fit me', 'what size'\n- upsell.moment    : styling advisory usage, asking about plans, upgrades, subscriptions\n- loyalty.event    : points, rewards, tier, redeem, badges, referrals\n\nSession so far: {{history}}\nCustomer utterance: \"{{utterance}}\"\n\nReturn JSON: {\"intent\": \"<one of the five>\", \"confidence\": <0-1>, \"entities\": {\"category\": \"<or null>\", \"sku\": \"<or null>\"}, \"rationale\": \"<one short sentence>\"}",
+  "changelog": "1.2.0 added session history for multi-turn disambiguation; 1.1.0 added entities; 1.0.0 initial"
+}

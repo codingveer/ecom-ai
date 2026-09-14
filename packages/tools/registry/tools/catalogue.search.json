@@ -1,0 +1,33 @@
+{
+  "name": "catalogue.search",
+  "version": "1.0.0",
+  "purpose": "Search the product catalogue. Returns unranked candidates with price tier, stock and cut.",
+  "allowed_agents": [
+    "discovery"
+  ],
+  "input_schema": {
+    "q": {
+      "type": "string",
+      "required": true
+    },
+    "category": {
+      "type": "string",
+      "required": false
+    },
+    "limit": {
+      "type": "integer",
+      "required": false,
+      "default": 40
+    }
+  },
+  "output_schema": {
+    "query": "string",
+    "candidates": "integer",
+    "results": "array"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/catalogue/search"
+  }
+}

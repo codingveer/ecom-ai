@@ -1,0 +1,28 @@
+{
+  "name": "customer.events.get",
+  "version": "1.0.0",
+  "purpose": "Read recent behavioural / clickstream events for a customer.",
+  "allowed_agents": [
+    "profiling",
+    "discovery"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    },
+    "limit": {
+      "type": "integer",
+      "required": false,
+      "default": 40
+    }
+  },
+  "output_schema": {
+    "events": "array"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/customers/{customer_id}/events"
+  }
+}

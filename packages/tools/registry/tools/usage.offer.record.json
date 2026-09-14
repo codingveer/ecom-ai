@@ -1,0 +1,22 @@
+{
+  "name": "usage.offer.record",
+  "version": "1.0.0",
+  "purpose": "Record that an upgrade offer was shown, for frequency-cap accounting.",
+  "allowed_agents": [
+    "upsell"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "recorded": "boolean"
+  },
+  "transport": {
+    "service": "services",
+    "method": "POST",
+    "path": "/usage/{customer_id}/offer-shown"
+  }
+}

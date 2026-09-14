@@ -1,0 +1,38 @@
+{
+  "name": "loyalty.accrue",
+  "version": "1.0.0",
+  "purpose": "Award points for an action, applying the entitlement multiplier.",
+  "allowed_agents": [
+    "loyalty"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    },
+    "base_points": {
+      "type": "integer",
+      "required": true
+    },
+    "multiplier": {
+      "type": "number",
+      "required": false,
+      "default": 1
+    },
+    "reason": {
+      "type": "string",
+      "required": false
+    }
+  },
+  "output_schema": {
+    "awarded": "integer",
+    "balance": "integer",
+    "tier": "string",
+    "liability_gbp": "number"
+  },
+  "transport": {
+    "service": "services",
+    "method": "POST",
+    "path": "/loyalty/{customer_id}/accrue"
+  }
+}

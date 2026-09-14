@@ -1,0 +1,24 @@
+{
+  "name": "loyalty.account.get",
+  "version": "1.0.0",
+  "purpose": "Read points balance, tier and engagement score.",
+  "allowed_agents": [
+    "loyalty",
+    "upsell"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "tier": "string",
+    "points_balance": "integer"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/loyalty/{customer_id}"
+  }
+}

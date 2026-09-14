@@ -1,0 +1,33 @@
+{
+  "name": "neu-tail-cf",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "gen:seed": "tsx scripts/gen-seed.ts",
+    "db:local": "wrangler d1 execute NEUTAIL --local --config packages/services/wrangler.jsonc --file packages/services/schema.sql && wrangler d1 execute NEUTAIL --local --config packages/services/wrangler.jsonc --file packages/services/seed.sql",
+    "db:remote": "wrangler d1 execute NEUTAIL --remote --config packages/services/wrangler.jsonc --file packages/services/schema.sql && wrangler d1 execute NEUTAIL --remote --config packages/services/wrangler.jsonc --file packages/services/seed.sql",
+    "dev:services": "wrangler dev --config packages/services/wrangler.jsonc --port 8101 --inspector-port 9231",
+    "dev:tools": "wrangler dev --config packages/tools/wrangler.jsonc --port 8102 --inspector-port 9232",
+    "dev:llm": "wrangler dev --config packages/llm/wrangler.jsonc --port 8103 --inspector-port 9233",
+    "dev:app": "wrangler dev --config packages/app/wrangler.jsonc --port 8100 --inspector-port 9230",
+    "dev": "concurrently -n services,tools,llm,app -c blue,magenta,yellow,green \"npm:dev:services\" \"npm:dev:tools\" \"npm:dev:llm\" \"npm:dev:app\"",
+    "deploy": "wrangler deploy --config packages/services/wrangler.jsonc && wrangler deploy --config packages/tools/wrangler.jsonc && wrangler deploy --config packages/llm/wrangler.jsonc && wrangler deploy --config packages/app/wrangler.jsonc",
+    "smoke": "tsx scripts/smoke.ts",
+    "gen": "tsx scripts/gen-seed.ts && tsx scripts/gen-registry.ts && tsx scripts/gen-prompts.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json"
+  },
+  "dependencies": {
+    "hono": "^4.13.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260911.1",
+    "@types/node": "^26.5.1",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.131.1"
+  }
+}

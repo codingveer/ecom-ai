@@ -1,0 +1,24 @@
+{
+  "name": "subscription.get",
+  "version": "1.0.0",
+  "purpose": "Read current subscription tier and price.",
+  "allowed_agents": [
+    "upsell",
+    "loyalty"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "tier": "string",
+    "price_gbp_month": "number"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/subscriptions/{customer_id}"
+  }
+}

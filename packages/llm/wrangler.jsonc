@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "neutail-llm",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+
+  // No d1_databases, no service binding to services. The gateway sees prompts and
+  // model providers, never customer data.
+  // Workers AI has no local simulator - the binding is proxied to Cloudflare and needs
+  // an authenticated session. Uncomment to use LLM_PROVIDER=workers-ai; leave it off for
+  // offline local dev. mock / anthropic / openai all work either way.
+  // "ai": { "binding": "AI" },
+  "durable_objects": {
+    "bindings": [{ "name": "USAGE", "class_name": "UsageCounter" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["UsageCounter"] }
+  ],
+  "vars": {
+    "LLM_PROVIDER": "mock",
+    "AI_GATEWAY_NAME": "neutail"
+    // AI_GATEWAY_ACCOUNT_ID: set as a var or secret
+    // ANTHROPIC_API_KEY / OPENAI_API_KEY: wrangler secret put
+  },
+  "workers_dev": false
+}

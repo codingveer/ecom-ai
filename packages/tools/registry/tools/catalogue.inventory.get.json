@@ -1,0 +1,24 @@
+{
+  "name": "catalogue.inventory.get",
+  "version": "1.0.0",
+  "purpose": "Live stock by size for one SKU.",
+  "allowed_agents": [
+    "discovery",
+    "fit"
+  ],
+  "input_schema": {
+    "sku": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "sku": "string",
+    "sizes": "array"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/inventory/{sku}"
+  }
+}

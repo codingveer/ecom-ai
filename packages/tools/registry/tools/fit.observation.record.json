@@ -1,0 +1,34 @@
+{
+  "name": "fit.observation.record",
+  "version": "1.0.0",
+  "purpose": "Write a confirmed fit observation back to the fit store.",
+  "allowed_agents": [
+    "fit"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    },
+    "category": {
+      "type": "string",
+      "required": true
+    },
+    "preferred_size": {
+      "type": "string",
+      "required": true
+    },
+    "fit_preference": {
+      "type": "string",
+      "required": false
+    }
+  },
+  "output_schema": {
+    "recorded": "boolean"
+  },
+  "transport": {
+    "service": "services",
+    "method": "POST",
+    "path": "/fit/{customer_id}/observation"
+  }
+}

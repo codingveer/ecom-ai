@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "neutail-services",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // The ONLY Worker in this deployment with a database binding.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "NEUTAIL", "database_id": "REPLACE_WITH_YOUR_D1_ID" }
+  ],
+
+  // Not publicly routable once deployed - reached only through service bindings.
+  "workers_dev": false
+}

@@ -1,0 +1,9 @@
+{
+  "id": "discovery.rationale",
+  "version": "1.0.0",
+  "owner": "discovery",
+  "model_class": "reasoning",
+  "system": "You explain, in two sentences maximum, why a ranked product set suits this customer. Reference the segment and the evidence. Never invent products.",
+  "template": "Segment: {{segment}} (affluence score {{affluence}}, loyalty {{tier}})\nEvidence: avg unit price GBP {{aup}}, premium item share {{premium_share}}, fit size {{fit_size}}\nQuery: \"{{query}}\"\nTop results: {{top}}\nExplain the ranking.",
+  "changelog": "1.0.0 initial"
+}

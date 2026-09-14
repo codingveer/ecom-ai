@@ -1,0 +1,26 @@
+{
+  "name": "catalogue.product.get",
+  "version": "1.0.0",
+  "purpose": "Fetch a single product record by SKU.",
+  "allowed_agents": [
+    "discovery",
+    "fit"
+  ],
+  "input_schema": {
+    "sku": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "sku": "string",
+    "title": "string",
+    "price_gbp": "number",
+    "cut": "string"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/catalogue/{sku}"
+  }
+}

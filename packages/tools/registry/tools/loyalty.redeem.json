@@ -1,0 +1,27 @@
+{
+  "name": "loyalty.redeem",
+  "version": "1.0.0",
+  "purpose": "Redeem points against a reward and release the point liability.",
+  "allowed_agents": [
+    "loyalty"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    },
+    "points": {
+      "type": "integer",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "redeemed": "boolean",
+    "balance": "integer"
+  },
+  "transport": {
+    "service": "services",
+    "method": "POST",
+    "path": "/loyalty/{customer_id}/redeem"
+  }
+}

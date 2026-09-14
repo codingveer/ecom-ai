@@ -1,0 +1,12 @@
+{
+  "name": "catalogue.trending.get",
+  "version": "1.0.0",
+  "purpose": "Trending SKUs in a category over a recent window, derived from clickstream and order volume. Demonstrates adding a capability at runtime.",
+  "allowed_agents": ["discovery"],
+  "input_schema": {
+    "category": { "type": "string", "required": true, "description": "Product category" },
+    "days": { "type": "integer", "required": false, "default": 30 }
+  },
+  "output_schema": { "category": "string", "window_days": "integer", "trending": "array" },
+  "transport": { "service": "services", "method": "GET", "path": "/catalogue/trending/{category}" }
+}
