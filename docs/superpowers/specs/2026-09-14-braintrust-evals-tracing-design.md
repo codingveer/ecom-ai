@@ -1,0 +1,126 @@
+# Braintrust evals + tracing for Neu.Tail
+
+Date: 2026-09-14
+Status: approved, pending implementation
+
+## Goal
+
+Add a Braintrust integration with two capabilities:
+
+1. **Offline evals** — a Braintrust `Eval()` suite that scores the 5 versioned prompts
+   in `packages/llm/src/prompts.ts` against a real model provider, so prompt changes can
+   be checked for regressions before they reach the demo.
+2. **Online tracing** — every `/complete` call made by `packages/llm` (the LLM gateway
+   Worker) is logged to Braintrust as a trace, alongside the token accounting the
+   gateway already does via its `UsageCounter` Durable Object.
+
+Setup context: the Braintrust CLI (`bt`) is installed at `~/.local/bin/bt` and this
+project is linked to a Braintrust org/project via `.braintrust.json` /
+`.env.braintrust` (both gitignored — added by the Braintrust setup wizard). The eval
+suite runs against **OpenAI** (`OPENAI_API_KEY`), since the `mock` provider returns
+fixed canned text and scoring it would be meaningless.
+
+## 1. Shared refactor: `packages/llm/src/providers.ts`
+
+Today, `render()` (template interpolation) and the three provider-calling functions
+(`callAnthropic`, `callOpenAI`, `callWorkersAI`) live inline in
+`packages/llm/src/index.ts` and take the Workers `Env` binding object directly.
+
+Extract them into a new `packages/llm/src/providers.ts`, with the provider functions
+taking plain values instead of `Env`:
+
+```ts
+callOpenAI(apiKey: string, gatewayBase: string | null, model: string, system: string, user: string)
+callAnthropic(apiKey: string, gatewayBase: string | null, model: string, system: string, user: string)
+callWorkersAI(ai: Ai, gatewayName: string | null, model: string, system: string, user: string)
+```
+
+`render()` moves into `packages/llm/src/prompts.ts` (next to the `Prompt` type and
+`PROMPTS` array it operates on) and is exported.
+
+`packages/llm/src/index.ts` keeps its exact current behavior — it just imports these
+functions and passes `c.env.OPENAI_API_KEY` / `c.env.ANTHROPIC_API_KEY` / `c.env.AI`
+through instead of the whole `Env` object. This is what lets the eval harness (a plain
+Node script, not a Worker) exercise the *same* rendering and HTTP-calling code the
+Worker uses in production, instead of reimplementing it.
+
+## 2. Offline evals (`evals/`)
+
+New top-level directory, sibling to `scripts/`, not a workspace package (evals aren't
+deployable and don't need `wrangler`).
+
+- Root `package.json`: add devDependencies `braintrust`, `autoevals`. Add npm script
+  `"eval": "braintrust eval evals"`.
+- New `tsconfig.evals.json` (mirrors `tsconfig.scripts.json`, `"include": ["evals/**/*"]`).
+  `typecheck` script gains `&& tsc -p tsconfig.evals.json`.
+- `evals/lib/harness.ts`: given a `prompt_id` and `variables`, looks up the prompt in
+  `PROMPTS`, calls `render()`, calls `callOpenAI()` from `providers.ts` with
+  `process.env.OPENAI_API_KEY` and the `reasoning`/`low_latency` model from the
+  `ROUTING.openai` table, and returns the raw text. The `ROUTING` table (currently
+  defined in `packages/llm/src/index.ts`) moves into `providers.ts` alongside the call
+  functions, since it's provider-routing logic rather than request-handling logic;
+  `index.ts` imports it same as before.
+- One eval file per prompt:
+  - `evals/intent-classify.eval.ts`
+  - `evals/discovery-rationale.eval.ts`
+  - `evals/fit-explanation.eval.ts`
+  - `evals/upsell-copy.eval.ts`
+  - `evals/loyalty-nudge.eval.ts`
+
+  Each has a small inline dataset (3-6 cases, drawn from the three demo personas —
+  Priya/C001, Aditi/C002, Meera/C003 — plus edge cases like "no fit consent" or
+  "below confidence threshold") and its own scorers:
+
+  - **`intent-classify`**: custom scorer parses the output as JSON and exact-matches
+    `.intent` against `expected.intent`. A second scorer checks the output parses as
+    JSON at all (format validity), independent of correctness.
+  - **`discovery-rationale`**: custom scorer checks the rationale does not mention any
+    SKU/title outside the ones passed in `top` (no invented products — mirrors the
+    prompt's own system-message constraint).
+  - **`fit-explanation`**: custom scorer checks that when `confidence < threshold`, the
+    text contains no size recommendation language (mirrors "if confidence is below
+    threshold, say plainly that no recommendation is being made").
+  - **`upsell-copy`** and **`loyalty-nudge`**: custom scorer checks no exclamation marks
+    and at most two sentences (both prompts' explicit constraints).
+  - All five also get one shared, optional LLM-judge scorer (from `autoevals`) for
+    general coherence, imported from `evals/lib/judge.ts`, so it's easy to drop if the
+    extra OpenAI spend per run isn't wanted.
+
+- Running `npm run eval` needs `OPENAI_API_KEY` and `BRAINTRUST_API_KEY` in the
+  environment. `braintrust eval` auto-loads `.env`/`.env.local`-style files; since this
+  project's Braintrust key already lives in `.env.braintrust` (wizard-created,
+  gitignored), document in README that `OPENAI_API_KEY` should go in the same file or
+  a plain `.env`.
+
+## 3. Online tracing (`packages/llm/src/index.ts`)
+
+- Add `braintrust` as a dependency of `packages/llm` (in addition to the root-level
+  eval usage — Workers bundle their own dependencies per-package).
+- Inside the `/complete` handler, where `c.env` is reachable (Workers have no
+  module-level "startup" phase with bindings available), conditionally call
+  `initLogger({ apiKey: c.env.BRAINTRUST_API_KEY, projectName: c.env.BRAINTRUST_PROJECT })`
+  guarded by `if (c.env.BRAINTRUST_API_KEY)`. `initLogger` is idempotent to call
+  repeatedly, so doing it per-request (rather than trying to cache it across isolate
+  reuse) is the simplest correct option. This mirrors the existing "degrade gracefully
+  when not configured" pattern already used for `gatewayBase()` (AI Gateway) and the
+  commented-out Workers AI binding — no key set means zero behavior change.
+- Wrap the existing provider-call block in `logger.traced(...)`, logging: agent,
+  `prompt_id`/`prompt_version`, rendered `user` input, `system` prompt, output `text`,
+  and the same metadata already assembled for the trace/usage DO (`model`, `provider`,
+  `input_tokens`, `output_tokens`, `latency_ms`, `degraded`).
+- Flush with `c.executionCtx.waitUntil(logger.flush())`, the same `waitUntil` pattern
+  already used right below it to record to `UsageCounter` — so tracing never blocks
+  the response and never risks being dropped when the isolate recycles.
+- New config in `packages/llm/wrangler.jsonc`: a `BRAINTRUST_PROJECT` var, plus a
+  comment noting `wrangler secret put BRAINTRUST_API_KEY` for deployed environments,
+  following the existing `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` comment convention. For
+  local dev, `BRAINTRUST_API_KEY` goes in `.dev.vars` (already gitignored).
+
+## Out of scope
+
+- No CI wiring (no CI exists in this repo today).
+- No Braintrust-hosted dataset management via their UI/API — datasets are inline
+  arrays in the eval files, which is enough for a hackathon-scale prompt set.
+- No change to the `mock` provider's behavior or output.
+- Not using Braintrust's setup-wizard "coding agent" step — this spec **is** the
+  substitute for that step, written and implemented by hand instead.
