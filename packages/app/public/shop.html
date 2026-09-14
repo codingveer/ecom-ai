@@ -225,6 +225,46 @@ async function runSearch(){
     </button>`).join('');
   document.querySelectorAll('#grid .card').forEach(c => c.onclick = () => openProduct(lastProducts[+c.dataset.i]));
 }
+
+function openProduct(p){
+  $('panelBody').innerHTML = `
+    <button class="close" id="closeOverlay">×</button>
+    <div class="ph" style="background:${CAT_COLOR[p.category] || '#F4F6FB'}">${CAT_ICON[p.category] || '🛍️'}</div>
+    <div class="brand">${esc(p.brand)}</div>
+    <h2 style="margin:2px 0 6px;font-size:18px">${esc(p.title)}</h2>
+    <div class="price" style="font-size:17px">£${p.price_gbp}</div>
+    <div class="meta">★ ${p.rating} · ${p.stock > 8 ? 'In stock' : p.stock > 0 ? 'Low stock' : 'Out of stock'}</div>
+    <div class="size-row" id="sizeRow">${['XS','S','M','L','XL'].map(s => `<span class="size-chip">${s}</span>`).join('')}</div>
+    <div class="actions">
+      <button class="btn ghost" id="checkFit">Check my size</button>
+      <button class="btn primary" id="addBag">Add to bag</button>
+    </div>
+    <div id="fitResult"></div>
+  `;
+  $('overlay').classList.add('open');
+  $('closeOverlay').onclick = () => $('overlay').classList.remove('open');
+  $('addBag').onclick = () => { cartCount++; $('cartCount').textContent = String(cartCount); };
+  $('checkFit').onclick = async () => {
+    $('fitResult').innerHTML = '<p class="empty">Checking…</p>';
+    const d = await ask(`what size should I get for ${p.sku}?`);
+    if (d.error) { $('fitResult').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
+    const f = d.payload || {};
+    if (f.abstained) {
+      $('fitResult').innerHTML = `<div class="result-box warn">${esc(f.explanation)}
+        <div class="why" id="whyFit">Why? ▾</div>
+        <div class="why-body" id="whyFitBody">${esc(JSON.stringify(f.evidence || {}))}</div></div>`;
+    } else {
+      document.querySelectorAll('#sizeRow .size-chip').forEach(chip => {
+        if (chip.textContent === f.recommended_size) chip.classList.add('rec');
+      });
+      const stockNote = f.size_in_stock === false ? ' Currently out of stock in that size.' : '';
+      $('fitResult').innerHTML = `<div class="result-box">Recommended size <b>${esc(f.recommended_size)}</b> at ${f.confidence}% confidence. ${esc(f.explanation)}${esc(stockNote)}
+        <div class="why" id="whyFit">Why? ▾</div>
+        <div class="why-body" id="whyFitBody">Grading offset ${f.evidence?.grading_delta_cm}cm · ${f.evidence?.observations} kept purchases in this category · brand cut ${esc(String(f.evidence?.brand_cut || ''))}</div></div>`;
+    }
+    $('whyFit').onclick = () => $('whyFitBody').classList.toggle('open');
+  };
+}
 </script>
 </body>
 </html>
