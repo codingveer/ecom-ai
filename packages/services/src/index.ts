@@ -148,7 +148,8 @@ async function semanticSearch(env: Env, q: string, category: string | null, limi
   return (results as any[])
     .map(r => ({ ...r, relevance: r2((scoreBySku.get(r.sku) ?? 0) * 10) }))
     .filter(r => r.stock > 0)
-    .sort((a, b) => b.relevance - a.relevance);
+    .sort((a, b) => b.relevance - a.relevance)
+    .slice(0, limit);
 }
 
 app.get('/catalogue/search', async c => {
