@@ -36,10 +36,13 @@
 
   main{max-width:1100px;margin:0 auto;padding:28px 24px 70px}
 
-  .search-row{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--ink);padding-bottom:10px;margin-bottom:22px}
+  .search-row{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--ink);padding-bottom:10px;margin-bottom:10px}
   .search-row svg{flex:0 0 auto;opacity:.5}
   .search-row input{flex:1;border:0;outline:0;font:inherit;font-size:15px;padding:4px 0}
   .search-row button{border:0;background:none;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+
+  .semantic-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);margin-bottom:22px;cursor:pointer;user-select:none}
+  .semantic-toggle input{cursor:pointer}
 
   .trending{margin-bottom:28px}
   .trending .label{font-size:11px;color:var(--mute);margin-bottom:9px}
@@ -47,9 +50,12 @@
   .chip{border:0;background:none;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;padding:0}
   .chip:hover{color:var(--accent)}
 
-  .section-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
-  .section-head h2{font-size:12px;margin:0}
+  .section-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+  .section-head h2{font-size:12px;margin:0;margin-right:auto}
   .section-head .count{font-size:12px;color:var(--mute)}
+  .mode-badge{font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px;white-space:nowrap}
+  .mode-badge.semantic{background:var(--accent);color:#fff}
+  .mode-badge.degraded{background:var(--warn-bg);color:#8A4B2A}
   .blurb{font-size:12.5px;color:var(--mute);margin-bottom:20px;max-width:70ch}
   .blurb b{color:var(--ink);font-weight:600}
   .why{color:var(--accent);cursor:pointer;font-weight:600;display:inline-block;margin-top:4px}
@@ -142,6 +148,7 @@
       <input type="text" id="search" placeholder="Search for anything..." autocomplete="off">
       <button id="searchBtn" class="caps">Search</button>
     </div>
+    <label class="semantic-toggle"><input type="checkbox" id="semanticToggle"> Semantic search <span class="muted">(embedding-based, understands meaning not just keywords)</span></label>
     <div class="trending">
       <div class="label caps">Trending</div>
       <div class="chips" id="pills"></div>
@@ -177,11 +184,11 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 const personaOf = id => PERSONAS.find(p => p.id === id) || null;
 const isSignedIn = () => customerId !== GUEST_ID;
 
-async function ask(text){
+async function ask(text, extra = {}){
   try {
     const r = await fetch(`/session/${sessionId}/message`, {
       method:'POST', headers:{'content-type':'application/json'},
-      body: JSON.stringify({ customerId, text })
+      body: JSON.stringify({ customerId, text, ...extra })
     });
     return await r.json();
   } catch (e) {
@@ -269,14 +276,19 @@ async function runSearch(){
   if (!text) return;
   $('grid').innerHTML = '<p class="empty">Searching…</p>';
   $('blurb').innerHTML = ''; $('resultsHead').innerHTML = '';
-  const d = await ask(text);
+  const semanticSearch = $('semanticToggle').checked;
+  const d = await ask(text, semanticSearch ? { semanticSearch: true } : {});
   if (d.error) { $('grid').innerHTML = `<p class="empty">${esc(d.reply)}</p>`; return; }
   if (d.intent !== 'discovery.rank' || !d.payload?.products) {
     $('grid').innerHTML = `<p class="empty">${esc(d.reply || 'No results for that.')}</p>`;
     return;
   }
   lastProducts = d.payload.products;
-  $('resultsHead').innerHTML = `<div class="section-head"><h2 class="caps">Results</h2><span class="count">${d.payload.candidates} products</span></div>`;
+  const modeNote = d.trace?.find(t => t.label?.startsWith('catalogue.search served'));
+  const modeBadge = semanticSearch
+    ? `<span class="mode-badge ${modeNote?.detail?.degraded ? 'degraded' : 'semantic'}">${modeNote?.detail?.degraded ? 'semantic unavailable — fell back to keyword match' : 'semantic match'}</span>`
+    : '';
+  $('resultsHead').innerHTML = `<div class="section-head"><h2 class="caps">Results</h2><span class="count">${d.payload.candidates} products</span>${modeBadge}</div>`;
   const mix = Object.entries(d.payload.price_tier_mix || {}).map(([t,n]) => `${n} ${t}`).join(', ');
   $('blurb').innerHTML = `<div class="blurb"><b>Personalised for you</b> — ${esc(d.payload.rationale)}
     <div class="why" id="whyToggle">Why am I seeing this? ▾</div>
