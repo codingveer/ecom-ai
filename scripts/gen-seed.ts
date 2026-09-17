@@ -61,6 +61,16 @@ function emit(table: string, cols: string[], rows: unknown[][]) {
   }
 }
 
+/** Deterministic natural-language sentence per product, for embedding at index time - no LLM call. */
+function describeProduct(p: { title: string; category: string; brand: string; colour: string; material: string; cut: string; styles: string[] }): string {
+  const cutPhrase = p.cut === 'runs_small' ? 'a snug, true-to-body cut'
+    : p.cut === 'runs_large' ? 'a relaxed, roomy cut'
+    : 'a true-to-size cut';
+  const tagPhrase = p.styles.join(', ');
+  return `A ${p.colour} ${p.material} ${p.title.toLowerCase()} by ${p.brand}, ${cutPhrase}, `
+    + `from the ${p.category} range, tagged ${tagPhrase}.`;
+}
+
 // ---- products + inventory + charts
 type P = { sku:string; category:string; brand:string; price:number; tier:string; cut:string };
 const products: P[] = [];
@@ -72,14 +82,17 @@ for (let i = 1; i <= 1200; i++) {
   const colour = pick(COLOURS), cut = pick(CUTS);
   const styles = [pick(STYLES), pick(STYLES)].filter((v, idx, a) => a.indexOf(v) === idx);
   const sku = `SKU-${String(i).padStart(5,'0')}`;
+  const title = `${brand.name} ${colour} ${SINGULAR[category]}`;
   const baseReturn = brand.tier === 'premium' ? 0.22 : brand.tier === 'value' ? 0.41 : 0.32;
   const returnRate = r2(Math.min(0.62, baseReturn + (cut === 'true_to_size' ? -0.06 : 0.05) + rnd() * 0.06));
-  pRows.push([sku, `${brand.name} ${colour} ${SINGULAR[category]}`, category, brand.name, price,
-    brand.tier, colour, pick(MATERIALS), styles.join(','), cut, r2(3.2 + rnd() * 1.7), returnRate]);
+  const material = pick(MATERIALS);
+  const description = describeProduct({ title, category, brand: brand.name, colour, material, cut, styles });
+  pRows.push([sku, title, category, brand.name, price,
+    brand.tier, colour, material, styles.join(','), cut, r2(3.2 + rnd() * 1.7), returnRate, description]);
   for (const s of SIZES) invRows.push([sku, s, int(0, 40)]);
   products.push({ sku, category, brand: brand.name, price, tier: brand.tier, cut });
 }
-emit('products', ['sku','title','category','brand','price_gbp','price_tier','colour','material','style_tags','cut','rating','return_rate'], pRows);
+emit('products', ['sku','title','category','brand','price_gbp','price_tier','colour','material','style_tags','cut','rating','return_rate','description'], pRows);
 emit('inventory', ['sku','size','qty'], invRows);
 
 const chartRows: unknown[][] = [];

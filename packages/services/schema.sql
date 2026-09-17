@@ -49,7 +49,8 @@ CREATE TABLE products (
   style_tags TEXT NOT NULL,
   cut TEXT NOT NULL,
   rating REAL NOT NULL,
-  return_rate REAL NOT NULL
+  return_rate REAL NOT NULL,
+  description TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE inventory (
