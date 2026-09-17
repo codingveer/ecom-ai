@@ -1,6 +1,7 @@
 node_modules/
 .wrangler/
 .dev.vars
+.worktrees/
 # Added by Braintrust Wizard
 .env.braintrust
 .braintrust.json
