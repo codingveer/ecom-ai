@@ -774,17 +774,22 @@ not reach the brief's 10–15% band on its own, and here is what else it takes.
 **Bonus · Semantic search (optional, not timed)** — terminal
 
 Requires a live Cloudflare account (Workers AI + Vectorize have no local simulator) and
-`npm run catalogue:reindex` already run once. Same fuzzy query, no keyword overlap with
-any product field, both ways:
+`npm run catalogue:reindex` already run once. Same fuzzy query, both ways:
 ```bash
 curl -s localhost:8101/catalogue/search --get --data-urlencode 'q=warm layer for chilly evenings' \
-  | jq '{mode, candidates, top: .results[0:3] | map(.title)}'
+  | jq '{mode, candidates, top: .results[0:5] | map({title, category, relevance})}'
 curl -s localhost:8101/catalogue/search --get --data-urlencode 'q=warm layer for chilly evenings' \
   --data-urlencode 'searchMode=semantic' \
-  | jq '{mode, candidates, top: .results[0:3] | map({title, relevance, description})}'
+  | jq '{mode, candidates, top: .results[0:3] | map({title, category, relevance, description})}'
 ```
-Lexical finds few or no matches; semantic ranks jackets/knitwear by meaning with no
-shared keywords. Same beat through the app: add `"semanticSearch": true` to a
+Say this out loud, not "lexical finds nothing" (verified during Task 3 — it doesn't):
+lexical returns candidates, but every one is tied at the *same* low `relevance` score
+(a coincidental substring hit — "layer" inside "layering", one of the style tags) and
+they're scattered across unrelated categories with no actual ranking signal. Semantic
+returns a small, coherently-ranked set of real jackets/coats/knitwear, each with a
+distinct, meaningfully higher `relevance` score and a `description` that explains why.
+The point isn't "zero vs. some" — it's "noise vs. signal": lexical's hit is luck, not
+understanding. Same beat through the app: add `"semanticSearch": true` to a
 `/session/:id/message` body and diff the trace's `S2.7` step against the same call
 without it.
 
