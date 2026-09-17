@@ -241,6 +241,35 @@ app.get('/catalogue/:sku', async c => {
   return row ? c.json(row) : c.json({ error: 'sku_not_found' }, 404);
 });
 
+// ---------------------------------------------------------- Catalogue admin (tagging)
+app.get('/admin/products', async c => {
+  const q = (c.req.query('q') ?? '').trim();
+  const category = c.req.query('category') || null;
+  const department = c.req.query('department') || null;
+  const page = Math.max(1, Number(c.req.query('page') ?? 1));
+  const pageSize = Math.min(200, Math.max(1, Number(c.req.query('pageSize') ?? 50)));
+
+  const conditions: string[] = [];
+  const binds: string[] = [];
+  if (q) { conditions.push('(sku LIKE ? OR title LIKE ? OR brand LIKE ?)'); binds.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  if (category) { conditions.push('category = ?'); binds.push(category); }
+  if (department) { conditions.push('department = ?'); binds.push(department); }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const [count, rows] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT COUNT(*) n FROM products ${where}`).bind(...binds),
+    c.env.DB.prepare(`SELECT * FROM products ${where} ORDER BY sku LIMIT ? OFFSET ?`)
+      .bind(...binds, pageSize, (page - 1) * pageSize),
+  ]);
+
+  return c.json({ page, pageSize, total: Number((count.results?.[0] as any).n), results: rows.results });
+});
+
+app.get('/admin/products/:sku', async c => {
+  const row = await c.env.DB.prepare(`SELECT * FROM products WHERE sku = ?`).bind(c.req.param('sku')).first();
+  return row ? c.json(row) : c.json({ error: 'sku_not_found' }, 404);
+});
+
 app.get('/inventory/:sku', async c => {
   const { results } = await c.env.DB.prepare(`SELECT size, qty FROM inventory WHERE sku = ?`).bind(c.req.param('sku')).all();
   return c.json({ sku: c.req.param('sku'), sizes: results });
