@@ -17,10 +17,17 @@ export async function rank(
   fitSize: string | null, category: string | null,
   /** Demo switch: skips the agent's own diversity floor so the fairness guardrail visibly blocks. */
   unsafeRanking = false,
+  /** Demo switch: routes retrieval through the embedding-backed Vectorize index instead of lexical scoring. */
+  semanticSearch = false,
 ) {
   const search = await k.invoke<any>('catalogue.search',
-    { q: query, ...(category ? { category } : {}), limit: 60 }, 'S2.7');
+    { q: query, ...(category ? { category } : {}), limit: 60, ...(semanticSearch ? { searchMode: 'semantic' } : {}) }, 'S2.7');
   const candidates = search.results as any[];
+
+  if (semanticSearch) {
+    k.note('tool', `catalogue.search served in ${search.mode} mode${search.degraded ? ' (degraded from semantic)' : ''}`,
+      { mode: search.mode, degraded: !!search.degraded }, 'S2.7');
+  }
 
   if (!candidates.length) {
     return { products: [], rationale: 'No stocked products matched that search.', policy: null, candidates: 0 };

@@ -56,7 +56,7 @@ export class SessionDO {
 
     let body: any;
     try { body = await req.json(); } catch { return Response.json({ error: 'invalid_json', detail: 'request body must be valid JSON' }, { status: 400 }); }
-    const { customerId, text, unsafeRanking } = body;
+    const { customerId, text, unsafeRanking, semanticSearch } = body;
     let session = await this.load();
 
     // A different customer on the same session id starts clean. Context never leaks
@@ -133,7 +133,7 @@ export class SessionDO {
             ? ((f.profiles as any[]).find(p => !category || p.category === category)?.preferred_size ?? null)
             : null;
         } catch { /* discovery continues without fit */ }
-        const r = await discovery.rank(dk, customerId, text, segment, fitSize, category, !!unsafeRanking);
+        const r = await discovery.rank(dk, customerId, text, segment, fitSize, category, !!unsafeRanking, !!semanticSearch);
         payload = r;
         session.working.lastProducts = r.products.map((p: any) => p.sku);
         session.working.lastSku = r.products[0]?.sku ?? session.working.lastSku ?? null;

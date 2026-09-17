@@ -89,6 +89,12 @@ export const BUNDLED: ToolContract[] = [
         "type": "integer",
         "required": false,
         "default": 40
+      },
+      "searchMode": {
+        "type": "string",
+        "required": false,
+        "default": "lexical",
+        "description": "\"lexical\" (default) or \"semantic\" - embedding-based retrieval via Workers AI + Vectorize."
       }
     },
     "output_schema": {
