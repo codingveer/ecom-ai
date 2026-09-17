@@ -10,6 +10,14 @@
     { "binding": "DB", "database_name": "NEUTAIL", "database_id": "675e2809-af1d-418a-8db6-6f02b64bb029" }
   ],
 
+  // Embeddings + vector index for opt-in semantic search (catalogue.search?searchMode=semantic).
+  // Neither has a local simulator - both always call the real Cloudflare API, same reason
+  // packages/llm/wrangler.jsonc's AI binding comment gives.
+  "ai": { "binding": "AI" },
+  "vectorize": [
+    { "binding": "VECTORS", "index_name": "neutail-catalogue" }
+  ],
+
   // Not publicly routable once deployed - reached only through service bindings.
   "workers_dev": false
 }

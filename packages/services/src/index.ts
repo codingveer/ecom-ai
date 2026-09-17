@@ -8,7 +8,8 @@
  */
 import { Hono } from 'hono';
 
-type Env = { DB: D1Database };
+type Env = { DB: D1Database; AI: Ai; VECTORS: VectorizeIndex };
+const EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
 const app = new Hono<{ Bindings: Env }>();
 const nowIso = () => new Date().toISOString();
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -101,21 +102,16 @@ app.post('/events', async c => {
 });
 
 // ---------------------------------------------------------- Catalogue
-app.get('/catalogue/search', async c => {
-  const q = (c.req.query('q') ?? '').toLowerCase().trim();
-  const category = c.req.query('category') ?? null;
-  const limit = Number(c.req.query('limit') ?? 40);
-  const terms = q.split(/\s+/).filter(Boolean);
-
+async function lexicalSearch(env: Env, terms: string[], category: string | null, limit: number) {
   const stmt = category
-    ? c.env.DB.prepare(`
+    ? env.DB.prepare(`
         SELECT p.*, COALESCE((SELECT SUM(qty) FROM inventory v WHERE v.sku = p.sku),0) stock
         FROM products p WHERE p.category = ?`).bind(category)
-    : c.env.DB.prepare(`
+    : env.DB.prepare(`
         SELECT p.*, COALESCE((SELECT SUM(qty) FROM inventory v WHERE v.sku = p.sku),0) stock FROM products p`);
   const { results } = await stmt.all();
 
-  const scored = (results as any[]).map(r => {
+  return (results as any[]).map(r => {
     const hay = `${r.title} ${r.category} ${r.style_tags} ${r.material} ${r.colour}`.toLowerCase();
     let score = 0;
     for (const t of terms) {
@@ -127,8 +123,53 @@ app.get('/catalogue/search', async c => {
   }).filter(r => (terms.length === 0 ? true : r.relevance > 0) && r.stock > 0)
     .sort((a, b) => b.relevance - a.relevance || b.rating - a.rating)
     .slice(0, limit);
+}
 
-  return c.json({ query: q, candidates: scored.length, results: scored });
+async function semanticSearch(env: Env, q: string, category: string | null, limit: number) {
+  const embedded = await env.AI.run(EMBED_MODEL as any, { text: [q] }) as any;
+  const vector = embedded.data[0] as number[];
+  const topK = Math.min(limit * 3, 100);
+  const matches = await env.VECTORS.query(vector, {
+    topK, returnMetadata: false,
+    filter: category ? { category } : undefined,
+  });
+  const ids = matches.matches.map(m => m.id);
+  if (!ids.length) return [];
+
+  const stmt = env.DB.prepare(`
+    SELECT p.*, COALESCE((SELECT SUM(qty) FROM inventory v WHERE v.sku = p.sku),0) stock
+    FROM products p WHERE p.sku IN (${ids.map(() => '?').join(',')})`).bind(...ids);
+  const { results } = await stmt.all();
+
+  const scoreBySku = new Map(matches.matches.map(m => [m.id, m.score]));
+  return (results as any[])
+    .map(r => ({ ...r, relevance: r2((scoreBySku.get(r.sku) ?? 0) * 10) }))
+    .filter(r => r.stock > 0)
+    .sort((a, b) => b.relevance - a.relevance);
+}
+
+app.get('/catalogue/search', async c => {
+  const q = (c.req.query('q') ?? '').toLowerCase().trim();
+  const category = c.req.query('category') ?? null;
+  const limit = Number(c.req.query('limit') ?? 40);
+  const terms = q.split(/\s+/).filter(Boolean);
+  const searchMode = c.req.query('searchMode') === 'semantic' ? 'semantic' : 'lexical';
+
+  if (searchMode === 'semantic') {
+    try {
+      const results = await semanticSearch(c.env, q, category, limit);
+      return c.json({ query: q, candidates: results.length, results, mode: 'semantic' });
+    } catch (err) {
+      const results = await lexicalSearch(c.env, terms, category, limit);
+      return c.json({
+        query: q, candidates: results.length, results, mode: 'lexical', degraded: true,
+        degraded_reason: err instanceof Error ? err.message : 'semantic search unavailable',
+      });
+    }
+  }
+
+  const results = await lexicalSearch(c.env, terms, category, limit);
+  return c.json({ query: q, candidates: results.length, results, mode: 'lexical' });
 });
 
 app.get('/catalogue/trending/:category', async c => {
