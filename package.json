@@ -17,6 +17,7 @@
     "deploy": "wrangler deploy --config packages/services/wrangler.jsonc && wrangler deploy --config packages/tools/wrangler.jsonc && wrangler deploy --config packages/llm/wrangler.jsonc && wrangler deploy --config packages/app/wrangler.jsonc",
     "smoke": "tsx scripts/smoke.ts",
     "gen": "tsx scripts/gen-seed.ts && tsx scripts/gen-registry.ts && tsx scripts/gen-prompts.ts",
+    "catalogue:reindex": "tsx scripts/reindex-catalogue.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json"
   },
   "dependencies": {

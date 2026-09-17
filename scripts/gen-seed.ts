@@ -80,6 +80,24 @@ function emit(table: string, cols: string[], rows: unknown[][]) {
   }
 }
 
+/**
+ * Deterministic natural-language sentence per product, for embedding at index time - no
+ * LLM call. Uses the real scraped `title` (unlike a synthetic `brand+colour+category`
+ * title, real titles don't already bake in brand/colour, so prepending colour/material
+ * and appending brand here doesn't duplicate them - see docs/superpowers/plans/
+ * 2026-09-17-semantic-search.md's Task 1 amendment for the synthetic-catalog case where
+ * it did).
+ */
+function describeProduct(p: { title: string; category: string; brand: string; colour: string; material: string; cut: string; styles: string[] }): string {
+  const cutPhrase = p.cut === 'runs_small' ? 'a snug, true-to-body cut'
+    : p.cut === 'runs_large' ? 'a relaxed, roomy cut'
+    : 'a true-to-size cut';
+  const tagPhrase = p.styles.join(', ');
+  const article = /^[aeiou]/i.test(p.colour) ? 'An' : 'A';
+  return `${article} ${p.colour} ${p.material} ${p.title.toLowerCase()} by ${p.brand}, ${cutPhrase}, `
+    + `from the ${p.category} range, tagged ${tagPhrase}.`;
+}
+
 // ---- products + inventory (real catalog, ingested from Fashion Data.csv)
 type P = { sku:string; category:string; brand:string; price:number; tier:string; cut:string; department:string };
 const products: P[] = [];
@@ -116,13 +134,14 @@ for (const cat of CATEGORIES) {
     const styles = [pick(STYLES), pick(STYLES)].filter((v, idx, a) => a.indexOf(v) === idx);
     const baseReturn = tier === 'premium' ? 0.22 : tier === 'value' ? 0.41 : 0.32;
     const returnRate = r2(Math.min(0.62, baseReturn + (cut === 'true_to_size' ? -0.06 : 0.05) + rnd() * 0.06));
+    const description = describeProduct({ title: cand.title, category: cat, brand: cand.brand, colour, material, cut, styles });
     pRows.push([sku, cand.title, cat, cand.brand, price, tier, colour, material, styles.join(','), cut,
-      r2(3.2 + rnd() * 1.7), returnRate, cand.imageUrl, cand.department]);
+      r2(3.2 + rnd() * 1.7), returnRate, cand.imageUrl, cand.department, description]);
     for (const s of SIZES) invRows.push([sku, s, int(0, 40)]);
     products.push({ sku, category: cat, brand: cand.brand, price, tier, cut, department: cand.department });
   }
 }
-emit('products', ['sku','title','category','brand','price_gbp','price_tier','colour','material','style_tags','cut','rating','return_rate','image_url','department'], pRows);
+emit('products', ['sku','title','category','brand','price_gbp','price_tier','colour','material','style_tags','cut','rating','return_rate','image_url','department','description'], pRows);
 emit('inventory', ['sku','size','qty'], invRows);
 
 // ---- size charts: real per-(category,size) weight/height bands, not invented cm offsets

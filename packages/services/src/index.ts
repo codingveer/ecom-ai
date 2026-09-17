@@ -8,7 +8,8 @@
  */
 import { Hono } from 'hono';
 
-type Env = { DB: D1Database };
+type Env = { DB: D1Database; AI: Ai; VECTORS: VectorizeIndex };
+const EMBED_MODEL = '@cf/baai/bge-base-en-v1.5';
 const app = new Hono<{ Bindings: Env }>();
 const nowIso = () => new Date().toISOString();
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -102,14 +103,7 @@ app.post('/events', async c => {
 });
 
 // ---------------------------------------------------------- Catalogue
-app.get('/catalogue/search', async c => {
-  const q = (c.req.query('q') ?? '').toLowerCase().trim();
-  const category = c.req.query('category') ?? null;
-  // 'unisex' means "no department declared" - same as no filter at all.
-  const department = c.req.query('department');
-  const limit = Number(c.req.query('limit') ?? 40);
-  const terms = q.split(/\s+/).filter(Boolean);
-
+async function lexicalSearch(env: Env, terms: string[], category: string | null, department: string | undefined, limit: number) {
   const conditions: string[] = [];
   const binds: string[] = [];
   if (category) { conditions.push('p.category = ?'); binds.push(category); }
@@ -118,12 +112,12 @@ app.get('/catalogue/search', async c => {
     binds.push(department);
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const stmt = c.env.DB.prepare(`
+  const stmt = env.DB.prepare(`
     SELECT p.*, COALESCE((SELECT SUM(qty) FROM inventory v WHERE v.sku = p.sku),0) stock
     FROM products p ${where}`).bind(...binds);
   const { results } = await stmt.all();
 
-  const scored = (results as any[]).map(r => {
+  return (results as any[]).map(r => {
     const hay = `${r.title} ${r.category} ${r.style_tags} ${r.material} ${r.colour}`.toLowerCase();
     let score = 0;
     for (const t of terms) {
@@ -135,8 +129,100 @@ app.get('/catalogue/search', async c => {
   }).filter(r => (terms.length === 0 ? true : r.relevance > 0) && r.stock > 0)
     .sort((a, b) => b.relevance - a.relevance || b.rating - a.rating)
     .slice(0, limit);
+}
 
-  return c.json({ query: q, candidates: scored.length, results: scored });
+async function semanticSearch(env: Env, q: string, category: string | null, department: string | undefined, limit: number) {
+  const embedded = await env.AI.run(EMBED_MODEL as any, { text: [q] }) as any;
+  const vector = embedded.data[0] as number[];
+  // Capped at 99, not 100: D1 caps bound parameters per statement at 100, and the
+  // hydration query below binds one `?` per id plus one more for an optional department
+  // filter - 100 ids would leave no room for that extra bind and throw D1_ERROR
+  // "too many SQL variables".
+  const topK = Math.min(limit * 3, 99);
+  const matches = await env.VECTORS.query(vector, {
+    // The boolean form (`returnMetadata: false`) mis-serializes through wrangler's
+    // remote-bindings proxy into invalid JSON for the real Vectorize API (VECTOR_QUERY_ERROR
+    // code 40026, "expected value" at the returnMetadata key) - the string-enum form doesn't.
+    topK, returnMetadata: 'none',
+    // department isn't in the Vectorize metadata index (only category is), so it's applied
+    // at D1 hydration below instead, same as lexicalSearch does.
+    filter: category ? { category } : undefined,
+  });
+  const ids = matches.matches.map(m => m.id);
+  if (!ids.length) return [];
+
+  const conditions: string[] = [`p.sku IN (${ids.map(() => '?').join(',')})`];
+  const binds: string[] = [...ids];
+  if (department && department !== 'unisex') {
+    conditions.push("(p.department = ? OR p.department = 'unisex')");
+    binds.push(department);
+  }
+  const stmt = env.DB.prepare(`
+    SELECT p.*, COALESCE((SELECT SUM(qty) FROM inventory v WHERE v.sku = p.sku),0) stock
+    FROM products p WHERE ${conditions.join(' AND ')}`).bind(...binds);
+  const { results } = await stmt.all();
+
+  const scoreBySku = new Map(matches.matches.map(m => [m.id, m.score]));
+  return (results as any[])
+    .map(r => ({ ...r, relevance: r2((scoreBySku.get(r.sku) ?? 0) * 10) }))
+    .filter(r => r.stock > 0)
+    .sort((a, b) => b.relevance - a.relevance)
+    .slice(0, limit);
+}
+
+app.get('/catalogue/search', async c => {
+  const q = (c.req.query('q') ?? '').toLowerCase().trim();
+  const category = c.req.query('category') ?? null;
+  // 'unisex' means "no department declared" - same as no filter at all.
+  const department = c.req.query('department');
+  const limit = Number(c.req.query('limit') ?? 40);
+  const terms = q.split(/\s+/).filter(Boolean);
+  const searchMode = c.req.query('searchMode') === 'semantic' ? 'semantic' : 'lexical';
+
+  if (searchMode === 'semantic') {
+    try {
+      const results = await semanticSearch(c.env, q, category, department, limit);
+      if (!results.length) {
+        const fallback = await lexicalSearch(c.env, terms, category, department, limit);
+        return c.json({
+          query: q, candidates: fallback.length, results: fallback, mode: 'lexical', degraded: true,
+          degraded_reason: 'no vector matches',
+        });
+      }
+      return c.json({ query: q, candidates: results.length, results, mode: 'semantic' });
+    } catch (err) {
+      const results = await lexicalSearch(c.env, terms, category, department, limit);
+      return c.json({
+        query: q, candidates: results.length, results, mode: 'lexical', degraded: true,
+        degraded_reason: err instanceof Error ? err.message : 'semantic search unavailable',
+      });
+    }
+  }
+
+  const results = await lexicalSearch(c.env, terms, category, department, limit);
+  return c.json({ query: q, candidates: results.length, results, mode: 'lexical' });
+});
+
+app.post('/catalogue/reindex', async c => {
+  const { results } = await c.env.DB.prepare(`SELECT sku, category, description FROM products`).all();
+  const rows = results as { sku: string; category: string; description: string }[];
+
+  const EMBED_BATCH = 20;
+  const UPSERT_BATCH = 200;
+  const toUpsert: VectorizeVector[] = [];
+
+  for (let i = 0; i < rows.length; i += EMBED_BATCH) {
+    const chunk = rows.slice(i, i + EMBED_BATCH);
+    const embedded = await c.env.AI.run(EMBED_MODEL as any, { text: chunk.map(r => r.description) }) as any;
+    const vectors: number[][] = embedded.data;
+    chunk.forEach((r, idx) => toUpsert.push({ id: r.sku, values: vectors[idx], metadata: { category: r.category } }));
+  }
+
+  for (let i = 0; i < toUpsert.length; i += UPSERT_BATCH) {
+    await c.env.VECTORS.upsert(toUpsert.slice(i, i + UPSERT_BATCH));
+  }
+
+  return c.json({ indexed: toUpsert.length });
 });
 
 app.get('/catalogue/trending/:category', async c => {

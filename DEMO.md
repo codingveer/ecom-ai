@@ -80,6 +80,35 @@ not reach the brief's 10–15% band on its own, and here is what else it takes.
 
 ---
 
+**Bonus · Semantic search (optional, not timed)** — terminal
+
+Requires a live Cloudflare account (Workers AI + Vectorize have no local simulator),
+the metadata index created once via `wrangler vectorize create-metadata-index neutail-catalogue
+--property-name=category --type=string` (otherwise any category-filtered query silently
+returns zero matches), and `npm run catalogue:reindex` already run once. Also run
+`curl -X POST localhost:8102/registry/reset` first to pick up the `searchMode` field on
+the `catalogue.search` tool contract (only needed if you haven't already run `npm run
+smoke`, which resets the registry as a side effect). Same fuzzy query, both ways:
+```bash
+curl -s localhost:8101/catalogue/search --get --data-urlencode 'q=warm layer for chilly evenings' \
+  | jq '{mode, candidates, top: .results[0:5] | map({title, category, relevance})}'
+curl -s localhost:8101/catalogue/search --get --data-urlencode 'q=warm layer for chilly evenings' \
+  --data-urlencode 'searchMode=semantic' \
+  | jq '{mode, candidates, top: .results[0:3] | map({title, category, relevance, description})}'
+```
+Say this out loud, not "lexical finds nothing" (verified during Task 3 — it doesn't):
+lexical returns candidates, but every one is tied at the *same* low `relevance` score
+(a coincidental substring hit — "layer" inside "layering", one of the style tags) and
+they're scattered across unrelated categories with no actual ranking signal. Semantic
+returns a small, coherently-ranked set of real jackets/coats/knitwear, each with a
+distinct, meaningfully higher `relevance` score and a `description` that explains why.
+The point isn't "zero vs. some" — it's "noise vs. signal": lexical's hit is luck, not
+understanding. Same beat through the app: add `"semanticSearch": true` to a
+`/session/:id/message` body and diff the trace's `S2.7` step against the same call
+without it.
+
+---
+
 ### Questions to have an answer ready for
 - *Can an agent reach the database?* Open the four `wrangler.jsonc` files — three have no
   D1 binding at all. The platform will not hand the agents Worker a database handle.

@@ -55,7 +55,8 @@ CREATE TABLE products (
   rating REAL NOT NULL,
   return_rate REAL NOT NULL,
   image_url TEXT NOT NULL,
-  department TEXT NOT NULL DEFAULT 'unisex'
+  department TEXT NOT NULL DEFAULT 'unisex',
+  description TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE inventory (
