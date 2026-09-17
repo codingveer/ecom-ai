@@ -43,6 +43,17 @@ instead (`--port 8101` matches the port `reindex-catalogue.ts` defaults to; so t
 reads/writes the deployed D1 and Vectorize resources, not local ones), then
 `npm run catalogue:reindex`.
 
+**Re-run `npm run catalogue:reindex` after every `npm run gen` / reseed.** `gen-seed.ts`
+reassigns SKU numbers from freshly-sampled catalogue rows each run, so the Vectorize
+index (keyed by SKU, from whatever the *previous* seed generation looked like) silently
+drifts out of sync with D1's current product data - the same SKU now points at a
+different product. Symptom: `searchMode=semantic` returns `mode: "semantic"` with no
+error, but results include categories that don't match the `category` filter you passed.
+Also note Vectorize's metadata index (`category`) takes roughly a minute to fully
+propagate after a reindex - a query run immediately after can return partially-stale
+results without any error or degrade signal, so don't judge a reindex by the first query
+after it.
+
 Only `neutail-app` is publicly routable. The other three have `workers_dev: false` and
 are reachable solely through service bindings.
 
