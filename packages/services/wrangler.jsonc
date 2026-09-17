@@ -15,7 +15,7 @@
   // packages/llm/wrangler.jsonc's AI binding comment gives.
   "ai": { "binding": "AI" },
   "vectorize": [
-    { "binding": "VECTORS", "index_name": "neutail-catalogue" }
+    { "binding": "VECTORS", "index_name": "neutail-catalogue", "remote": true }
   ],
 
   // Not publicly routable once deployed - reached only through service bindings.

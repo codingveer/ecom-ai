@@ -130,7 +130,10 @@ async function semanticSearch(env: Env, q: string, category: string | null, limi
   const vector = embedded.data[0] as number[];
   const topK = Math.min(limit * 3, 100);
   const matches = await env.VECTORS.query(vector, {
-    topK, returnMetadata: false,
+    // The boolean form (`returnMetadata: false`) mis-serializes through wrangler's
+    // remote-bindings proxy into invalid JSON for the real Vectorize API (VECTOR_QUERY_ERROR
+    // code 40026, "expected value" at the returnMetadata key) - the string-enum form doesn't.
+    topK, returnMetadata: 'none',
     filter: category ? { category } : undefined,
   });
   const ids = matches.matches.map(m => m.id);
@@ -170,6 +173,28 @@ app.get('/catalogue/search', async c => {
 
   const results = await lexicalSearch(c.env, terms, category, limit);
   return c.json({ query: q, candidates: results.length, results, mode: 'lexical' });
+});
+
+app.post('/catalogue/reindex', async c => {
+  const { results } = await c.env.DB.prepare(`SELECT sku, category, description FROM products`).all();
+  const rows = results as { sku: string; category: string; description: string }[];
+
+  const EMBED_BATCH = 20;
+  const UPSERT_BATCH = 200;
+  const toUpsert: VectorizeVector[] = [];
+
+  for (let i = 0; i < rows.length; i += EMBED_BATCH) {
+    const chunk = rows.slice(i, i + EMBED_BATCH);
+    const embedded = await c.env.AI.run(EMBED_MODEL as any, { text: chunk.map(r => r.description) }) as any;
+    const vectors: number[][] = embedded.data;
+    chunk.forEach((r, idx) => toUpsert.push({ id: r.sku, values: vectors[idx], metadata: { category: r.category } }));
+  }
+
+  for (let i = 0; i < toUpsert.length; i += UPSERT_BATCH) {
+    await c.env.VECTORS.upsert(toUpsert.slice(i, i + UPSERT_BATCH));
+  }
+
+  return c.json({ indexed: toUpsert.length });
 });
 
 app.get('/catalogue/trending/:category', async c => {
