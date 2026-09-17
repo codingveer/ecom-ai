@@ -31,15 +31,17 @@ shopper would rather than read the trace panel.
 wrangler d1 create NEUTAIL          # paste the id into packages/services/wrangler.jsonc
 wrangler kv namespace create REGISTRY   # paste the id into packages/tools/wrangler.jsonc
 wrangler vectorize create neutail-catalogue --dimensions=768 --metric=cosine  # for opt-in semantic search
+wrangler vectorize create-metadata-index neutail-catalogue --property-name=category --type=string
 npm run db:remote
 npm run deploy                      # services, tools, llm, app in dependency order
 ```
 
 Semantic search's index is populated by `npm run catalogue:reindex`, which POSTs to a
 locally running `services` Worker. For local data that's `npm run dev:services`; against
-the deployed database, run `wrangler dev --remote --config packages/services/wrangler.jsonc`
-instead (so the reindex reads/writes the deployed D1 and Vectorize resources, not local
-ones), then `npm run catalogue:reindex`.
+the deployed database, run `wrangler dev --remote --config packages/services/wrangler.jsonc --port 8101`
+instead (`--port 8101` matches the port `reindex-catalogue.ts` defaults to; so the reindex
+reads/writes the deployed D1 and Vectorize resources, not local ones), then
+`npm run catalogue:reindex`.
 
 Only `neutail-app` is publicly routable. The other three have `workers_dev: false` and
 are reachable solely through service bindings.

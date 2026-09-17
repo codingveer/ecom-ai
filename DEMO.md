@@ -80,8 +80,13 @@ not reach the brief's 10–15% band on its own, and here is what else it takes.
 
 **Bonus · Semantic search (optional, not timed)** — terminal
 
-Requires a live Cloudflare account (Workers AI + Vectorize have no local simulator) and
-`npm run catalogue:reindex` already run once. Same fuzzy query, both ways:
+Requires a live Cloudflare account (Workers AI + Vectorize have no local simulator),
+the metadata index created once via `wrangler vectorize create-metadata-index neutail-catalogue
+--property-name=category --type=string` (otherwise any category-filtered query silently
+returns zero matches), and `npm run catalogue:reindex` already run once. Also run
+`curl -X POST localhost:8102/registry/reset` first to pick up the `searchMode` field on
+the `catalogue.search` tool contract (only needed if you haven't already run `npm run
+smoke`, which resets the registry as a side effect). Same fuzzy query, both ways:
 ```bash
 curl -s localhost:8101/catalogue/search --get --data-urlencode 'q=warm layer for chilly evenings' \
   | jq '{mode, candidates, top: .results[0:5] | map({title, category, relevance})}'

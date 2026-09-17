@@ -162,6 +162,13 @@ app.get('/catalogue/search', async c => {
   if (searchMode === 'semantic') {
     try {
       const results = await semanticSearch(c.env, q, category, limit);
+      if (!results.length) {
+        const fallback = await lexicalSearch(c.env, terms, category, limit);
+        return c.json({
+          query: q, candidates: fallback.length, results: fallback, mode: 'lexical', degraded: true,
+          degraded_reason: 'no vector matches',
+        });
+      }
       return c.json({ query: q, candidates: results.length, results, mode: 'semantic' });
     } catch (err) {
       const results = await lexicalSearch(c.env, terms, category, limit);

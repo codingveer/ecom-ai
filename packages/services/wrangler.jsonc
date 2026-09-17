@@ -12,7 +12,11 @@
 
   // Embeddings + vector index for opt-in semantic search (catalogue.search?searchMode=semantic).
   // Neither has a local simulator - both always call the real Cloudflare API, same reason
-  // packages/llm/wrangler.jsonc's AI binding comment gives.
+  // packages/llm/wrangler.jsonc's AI binding comment gives. `ai` is unconditionally remote in
+  // wrangler's binding classification, but `vectorize` needs `remote: true` explicitly, or
+  // `wrangler dev` in normal mixed mode (D1 local, everything else proxied) throws "Binding
+  // VECTORS needs to be run remotely" at call time instead of actually proxying it - found
+  // during Task 3, `remote: true` added here rather than left implicit.
   "ai": { "binding": "AI" },
   "vectorize": [
     { "binding": "VECTORS", "index_name": "neutail-catalogue", "remote": true }
