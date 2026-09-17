@@ -301,7 +301,10 @@ async function semanticSearch(env: Env, q: string, category: string | null, limi
   const vector = embedded.data[0] as number[];
   const topK = Math.min(limit * 3, 100);
   const matches = await env.VECTORS.query(vector, {
-    topK, returnMetadata: false,
+    topK, returnMetadata: 'none', // 'none', not `false` - the boolean form mis-serializes through
+    // wrangler/workerd's remote-bindings proxy into invalid JSON for the real Vectorize REST API
+    // (VECTOR_QUERY_ERROR 40026, found during Task 3's real-API verification); the string-enum
+    // form (`VectorizeQueryOptions.returnMetadata?: boolean | 'all' | 'indexed' | 'none'`) works.
     filter: category ? { category } : undefined,
   });
   const ids = matches.matches.map(m => m.id);
