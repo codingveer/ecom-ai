@@ -62,12 +62,13 @@ function emit(table: string, cols: string[], rows: unknown[][]) {
 }
 
 /** Deterministic natural-language sentence per product, for embedding at index time - no LLM call. */
-function describeProduct(p: { title: string; category: string; brand: string; colour: string; material: string; cut: string; styles: string[] }): string {
+function describeProduct(p: { category: string; brand: string; colour: string; material: string; cut: string; styles: string[] }): string {
   const cutPhrase = p.cut === 'runs_small' ? 'a snug, true-to-body cut'
     : p.cut === 'runs_large' ? 'a relaxed, roomy cut'
     : 'a true-to-size cut';
   const tagPhrase = p.styles.join(', ');
-  return `A ${p.colour} ${p.material} ${p.title.toLowerCase()} by ${p.brand}, ${cutPhrase}, `
+  const article = /^[aeiou]/i.test(p.colour) ? 'An' : 'A';
+  return `${article} ${p.colour} ${p.material} ${SINGULAR[p.category]} by ${p.brand}, ${cutPhrase}, `
     + `from the ${p.category} range, tagged ${tagPhrase}.`;
 }
 
@@ -86,7 +87,7 @@ for (let i = 1; i <= 1200; i++) {
   const baseReturn = brand.tier === 'premium' ? 0.22 : brand.tier === 'value' ? 0.41 : 0.32;
   const returnRate = r2(Math.min(0.62, baseReturn + (cut === 'true_to_size' ? -0.06 : 0.05) + rnd() * 0.06));
   const material = pick(MATERIALS);
-  const description = describeProduct({ title, category, brand: brand.name, colour, material, cut, styles });
+  const description = describeProduct({ category, brand: brand.name, colour, material, cut, styles });
   pRows.push([sku, title, category, brand.name, price,
     brand.tier, colour, material, styles.join(','), cut, r2(3.2 + rnd() * 1.7), returnRate, description]);
   for (const s of SIZES) invRows.push([sku, s, int(0, 40)]);
