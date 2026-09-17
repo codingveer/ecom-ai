@@ -2,13 +2,21 @@
 
 Objective 3 asks for this explicitly. Volunteering it is stronger than being asked.
 
-## 1. Vector database replaced by lexical retrieval
+## 1. Vector database is opt-in, not the default retrieval path
 **Design:** S12 step 7 — semantic candidate retrieval from a Vector DB.
-**Build:** scored lexical match over title, category, style tags, material and colour.
+**Build:** scored lexical match over title, category, style tags, material and colour
+remains the default. A real embedding-backed path now exists alongside it: Workers AI
+(`@cf/baai/bge-base-en-v1.5`) embeds a generated description per product at index time
+and the query at search time, matched via a Vectorize index — selectable per request
+with `searchMode: "semantic"` on `catalogue.search` (`semanticSearch: true` on a
+session message).
 **Why:** the personalisation claim rests on how candidates are *ranked* by segment, not
-on how they are retrieved. An embedding index would have cost a day and moved nothing
-the mission grades. The retrieval call sits behind the `catalogue.search` contract, so
-swapping in a vector store changes one service implementation and no agent code.
+on how they are retrieved, so lexical stays the default with no behaviour change. The
+vector path exists to make the "swapping in a vector store changes one service
+implementation and no agent code" claim demonstrable rather than theoretical — the
+retrieval call still sits behind the same `catalogue.search` contract, and `tools`/
+`llm`/`app`'s bindings are untouched; only `services` gained an `AI` and a `vectorize`
+binding.
 
 ## 2. Event bus replaced by synchronous dispatch
 **Design:** S6 / S23 — Kafka event bus feeding the Intent Router.
