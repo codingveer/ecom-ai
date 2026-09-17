@@ -64,7 +64,7 @@ export function mockComplete(promptId: string, vars: Record<string, any>, system
       const conf = Number(vars.confidence ?? 0);
       const threshold = Number(vars.threshold ?? 70);
       text = conf >= threshold
-        ? `Size ${vars.size} in ${vars.brand}, based on ${vars.history} and a grading offset of ${vars.offset} cm against this brand's ${vars.category} chart. This brand ${String(vars.cut).replace(/_/g, ' ')}, which is already accounted for.`
+        ? `Size ${vars.size} in ${vars.brand}, based on ${vars.history} and a ${vars.offset}σ match against this category's real height/weight band. This brand ${String(vars.cut).replace(/_/g, ' ')}, which is already accounted for.`
         : `Not enough fit history to recommend a size here with confidence, so no size is being suggested. The size guide and virtual try-on are the safer route for this purchase.`;
       break;
     }

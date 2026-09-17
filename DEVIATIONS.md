@@ -41,11 +41,17 @@ disable the floor and watch the guardrail block and fall back to a neutral ranki
 
 ## 5. Fit confidence is a scorecard, not a learned model
 **Design:** S13 — recommended size with a confidence score, abstain below 70%.
-**Build:** additive scorecard over observation depth, grading distance against the brand
-chart, brand cut, and prior fit-related returns with that brand.
-**Why:** no training data exists in a seeded corpus, and a learned model here would be
-theatre. The scorecard is inspectable, which is what "surface the reasoning" asks for.
-The threshold and abstain behaviour are exactly as designed.
+**Build:** additive scorecard over observation depth, grading distance against a real
+per-category weight/height band, brand cut, and prior fit-related returns with that
+brand.
+**Why:** the grading distance used to be measured against invented bust/waist/hip cm
+offsets. It is now measured against real per-category size bands derived from a
+~120k-row anthropometric dataset (`fitment_dat.csv`: weight, age, height -> size), with
+each seeded customer's own height/weight sampled from a real row matching their
+purchase-size history. That is real data, not a trained model: a learned model would
+still be theatre without labelled outcomes to fit against. The scorecard stays
+inspectable, which is what "surface the reasoning" asks for, and the threshold/abstain
+behaviour is unchanged.
 
 ## 6. Both monetisation agents built
 **Brief:** "Service Upsell or Loyalty Accrual (select one)" on page 1, but Objective 3

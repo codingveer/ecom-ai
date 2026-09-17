@@ -13,7 +13,7 @@ run the panel sees.
 ```bash
 curl -s localhost:8101/analytics/return-rate | jq
 ```
-"34.0% across 1,318 order items, 58% of it size and fit coded. That is the number we
+"34.0% across 1,120 order items, 58% of it size and fit coded. That is the number we
 are going to move, and it is in the data, not on a slide."
 
 **1 · Affluent customer (60s)** — console, persona Priya, ask *show me an occasion dress*.
@@ -25,7 +25,9 @@ Different product set, different reasoning, same candidate pool. Say the fairnes
 out loud: the ranking differs, the access does not.
 
 **3 · Fit with history (45s)** — back to Priya, *what size should I get?*
-Size M at 77% confidence, with the grading offset and the seven kept purchases shown.
+Size M at 99% confidence, with the real height/weight match and the seven kept
+purchases shown — her body metrics and this brand's grading are both real data now,
+not invented cm offsets.
 
 **4 · Fit without history (45s)** — Aditi, same question. The consent gate blocks, the
 agent abstains. "A low-confidence guess causes the return we exist to remove, so we make

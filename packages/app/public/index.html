@@ -61,6 +61,7 @@
        border-radius:4px;padding:1px 5px;vertical-align:1px}
   .ms{float:right;color:#A6ADC4;font-size:11.5px;font-variant-numeric:tabular-nums}
   .blocked .label{color:var(--coral)}
+  .trace-thumb{display:block;width:34px;height:34px;object-fit:cover;border-radius:4px;margin-top:5px;border:1px solid var(--rule)}
   .meter{border-top:1px solid var(--rule);padding:9px 20px;font-size:12px;color:var(--mute);
          display:flex;gap:20px;flex-wrap:wrap;background:#fff}
   .meter b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
@@ -115,6 +116,7 @@ const PERSONAS = [
   { id:'C001', name:'Priya', note:'affluent, loyal, rich fit history' },
   { id:'C002', name:'Aditi',  note:'value-seeking, new, no fit consent' },
   { id:'C003', name:'Meera',  note:'free tier, third styling session' },
+  { id:'C004', name:'Arjun', note:'menswear department, mid affluence' },
 ];
 const SUGGESTIONS = [
   'show me an occasion dress',
@@ -153,12 +155,26 @@ function bubble(who, text, cls){
   $('chat').append(d); $('chat').scrollTop = 1e9;
 }
 
+// The kernel only ever traces { args, ok, error } for a tool call - never the data it
+// returned - so traces stay lean. A SKU's thumbnail comes from here instead: a running
+// client-side map built from product data already present in chat replies.
+const skuImages = {};
+function harvestImages(node, seen){
+  if (!node || typeof node !== 'object' || seen.has(node)) return;
+  seen.add(node);
+  if (Array.isArray(node)) { node.forEach(v => harvestImages(v, seen)); return; }
+  if (typeof node.sku === 'string' && typeof node.image_url === 'string') skuImages[node.sku] = node.image_url;
+  for (const v of Object.values(node)) harvestImages(v, seen);
+}
+
 function renderTrace(steps){
   const wrap = document.createElement('div');
   wrap.style.marginBottom = '14px';
   wrap.innerHTML = steps.map(s => {
     const blocked = typeof s.label === 'string' && s.label.includes(': block');
     const detail = s.detail == null ? '' : (typeof s.detail === 'string' ? s.detail : JSON.stringify(s.detail));
+    const sku = s.detail?.args?.sku;
+    const thumb = sku && skuImages[sku] ? `<img class="trace-thumb" src="${esc(skuImages[sku])}" alt="" loading="lazy" onerror="this.remove()">` : '';
     return `<div class="step ${blocked?'blocked':''}">
       <div class="n">${s.seq}</div>
       <div class="badge ${s.stage}">${s.stage}</div>
@@ -166,6 +182,7 @@ function renderTrace(steps){
         <span class="label">${esc(s.label)}</span>
         ${s.m3_ref ? `<span class="ref">${esc(s.m3_ref)}</span>` : ''}
         ${s.ms != null ? `<span class="ms">${s.ms} ms</span>` : ''}
+        ${thumb}
         ${detail ? `<div class="detail">${esc(detail.length > 300 ? detail.slice(0,300)+'…' : detail)}</div>` : ''}
       </div></div>`;
   }).join('');
@@ -193,6 +210,7 @@ async function send(){
     const d = await r.json();
     if (d.error) { bubble('System', d.detail || d.error, 'bot'); return; }
     bubble('Assistant · ' + d.agent + ' agent', d.reply, 'bot');
+    harvestImages(d.payload, new Set());
     renderTrace(d.trace);
     for (const s of d.trace){
       if (s.stage === 'tool') totals.tools++;

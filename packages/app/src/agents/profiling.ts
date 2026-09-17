@@ -12,6 +12,8 @@ export type Segment = {
   affluence_score: number;
   loyalty_status: 'new' | 'developing' | 'loyal';
   tier: string;
+  /** Declared catalogue department - navigation, not a protected attribute. 'unisex' = no filter. */
+  shops_for: 'women' | 'men' | 'unisex';
   evidence: Record<string, number | string>;
 };
 
@@ -33,6 +35,7 @@ export async function classify(k: Kernel, customerId: string) {
   const segment: Segment = {
     affluence, affluence_score: affluenceScore, loyalty_status,
     tier: profile.loyalty?.tier ?? 'Bronze',
+    shops_for: profile.identity.shops_for ?? 'unisex',
     evidence: {
       avg_unit_price_gbp: tx.avg_unit_price_gbp,
       premium_item_share: tx.premium_item_share,

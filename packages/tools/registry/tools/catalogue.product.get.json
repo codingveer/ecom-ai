@@ -16,7 +16,8 @@
     "sku": "string",
     "title": "string",
     "price_gbp": "number",
-    "cut": "string"
+    "cut": "string",
+    "image_url": "string"
   },
   "transport": {
     "service": "services",

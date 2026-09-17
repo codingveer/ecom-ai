@@ -14,6 +14,7 @@
   },
   "output_schema": {
     "consent_fit": "boolean",
+    "measurements": "object",
     "profiles": "array",
     "fit_returns": "array"
   },

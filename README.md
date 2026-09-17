@@ -78,15 +78,15 @@ review, and it takes ten seconds to show a panel.
 `npm run gen` prints its own acceptance numbers:
 
 ```
-customers            40
+customers            41
 products             1200
-order items          1318
-returns              448
+order items          1120
+returns              381
 RETURN RATE          34.0%   (baseline target 34%)
   size_fit         58.0%
-  changed_mind     22.1%
+  changed_mind     22.0%
   quality_defect   12.1%
-  other             7.8%
+  other             7.9%
 ```
 
 Returns are assigned by exact quota rather than sampled, because the demo quotes these
@@ -142,7 +142,7 @@ rather than in a slide.
    share and annual spend; loyalty status from order count and tenure.
 2. **Discovery & recommendation** — same query, different product set, with the
    reasoning and per-SKU score components surfaced.
-3. **Size & fit** — consent gate, brand grading table, confidence score, abstain below 70%.
+3. **Size & fit** — consent gate, real height/weight grading band per category, confidence score, abstain below 70%.
 4. **Service upsell** — fires at the third free session; the frequency-cap policy can
    veto the agent.
 5. **Loyalty accrual** — reads the entitlement the Upsell Agent wrote and applies 2×.

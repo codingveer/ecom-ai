@@ -14,6 +14,11 @@
       "type": "string",
       "required": false
     },
+    "department": {
+      "type": "string",
+      "required": false,
+      "description": "'women' | 'men' | 'unisex' - hard-filters out the opposite department, unisex products always included"
+    },
     "limit": {
       "type": "integer",
       "required": false,

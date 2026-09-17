@@ -25,7 +25,11 @@ CREATE TABLE customers (
   premium_share REAL NOT NULL,
   consent_fit INTEGER NOT NULL,
   consent_marketing INTEGER NOT NULL,
-  seed_persona TEXT
+  seed_persona TEXT,
+  height_cm REAL NOT NULL,
+  weight_kg REAL NOT NULL,
+  age INTEGER NOT NULL,
+  shops_for TEXT NOT NULL DEFAULT 'unisex'
 );
 
 CREATE TABLE loyalty_accounts (
@@ -49,7 +53,9 @@ CREATE TABLE products (
   style_tags TEXT NOT NULL,
   cut TEXT NOT NULL,
   rating REAL NOT NULL,
-  return_rate REAL NOT NULL
+  return_rate REAL NOT NULL,
+  image_url TEXT NOT NULL,
+  department TEXT NOT NULL DEFAULT 'unisex'
 );
 
 CREATE TABLE inventory (
@@ -57,10 +63,14 @@ CREATE TABLE inventory (
   PRIMARY KEY (sku, size)
 );
 
+-- Real per-(category,size) weight/height bands, derived from a ~120k-row anthropometric
+-- dataset (fitment_dat.csv) rather than invented cm offsets. Brand nuance is expressed
+-- through products.cut instead of a brand dimension here - see DEVIATIONS.md #5.
 CREATE TABLE size_charts (
-  brand TEXT NOT NULL, category TEXT NOT NULL, size TEXT NOT NULL,
-  bust_cm REAL, waist_cm REAL, hip_cm REAL, grading_tolerance_cm REAL NOT NULL,
-  PRIMARY KEY (brand, category, size)
+  category TEXT NOT NULL, size TEXT NOT NULL,
+  weight_kg_avg REAL NOT NULL, weight_kg_stdev REAL NOT NULL,
+  height_cm_avg REAL NOT NULL, height_cm_stdev REAL NOT NULL,
+  PRIMARY KEY (category, size)
 );
 
 CREATE TABLE orders (
@@ -82,7 +92,6 @@ CREATE TABLE returns (
 CREATE TABLE fit_profiles (
   customer_id TEXT NOT NULL, category TEXT NOT NULL,
   preferred_size TEXT NOT NULL, fit_preference TEXT NOT NULL,
-  bust_cm REAL, waist_cm REAL, hip_cm REAL,
   observations INTEGER NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY (customer_id, category)
 );
@@ -112,3 +121,4 @@ CREATE INDEX idx_items_customer ON order_items(customer_id);
 CREATE INDEX idx_returns_customer ON returns(customer_id);
 CREATE INDEX idx_events_customer ON events(customer_id);
 CREATE INDEX idx_products_cat ON products(category);
+CREATE INDEX idx_products_dept ON products(department);

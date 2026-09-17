@@ -7,7 +7,8 @@
     "discovery",
     "fit",
     "upsell",
-    "loyalty"
+    "loyalty",
+    "orchestrator"
   ],
   "input_schema": {
     "customer_id": {

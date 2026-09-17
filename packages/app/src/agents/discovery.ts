@@ -19,7 +19,7 @@ export async function rank(
   unsafeRanking = false,
 ) {
   const search = await k.invoke<any>('catalogue.search',
-    { q: query, ...(category ? { category } : {}), limit: 60 }, 'S2.7');
+    { q: query, ...(category ? { category } : {}), department: segment.shops_for, limit: 60 }, 'S2.7');
   const candidates = search.results as any[];
 
   if (!candidates.length) {
@@ -69,7 +69,7 @@ export async function rank(
   const top = served.slice(0, 5).map(p => ({
     sku: p.sku, title: p.title, brand: p.brand, category: p.category,
     price_gbp: p.price_gbp, price_tier: p.price_tier, cut: p.cut,
-    rating: p.rating, stock: p.stock, score: p.score ?? null,
+    rating: p.rating, stock: p.stock, score: p.score ?? null, image_url: p.image_url,
     why: p.score !== undefined
       ? `relevance ${p.relevance} x segment weight ${p.tier_weight} for ${segment.affluence}, rating ${p.rating}, return rate ${(p.return_rate * 100).toFixed(0)}%`
       : 'neutral ranking (fairness guardrail engaged)',

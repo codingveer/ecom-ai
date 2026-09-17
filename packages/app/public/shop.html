@@ -74,7 +74,8 @@
   .panel{background:#fff;max-width:760px;width:100%;position:relative;display:grid;grid-template-columns:1fr 1fr}
   @media (max-width:640px){.panel{grid-template-columns:1fr}}
   .close{position:absolute;top:14px;right:16px;border:0;background:none;font-size:22px;cursor:pointer;z-index:2}
-  .panel .ph{background:var(--front);display:flex;align-items:center;justify-content:center;font-size:80px;min-height:320px}
+  .panel .ph{background:var(--front);display:flex;align-items:center;justify-content:center;font-size:80px;min-height:320px;overflow:hidden}
+  .panel .ph img{width:100%;height:100%;object-fit:cover}
   .pd-info{padding:30px}
   .pd-info .brand{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
   .pd-info h2{font-size:19px;font-weight:500;margin:4px 0 8px}
@@ -162,6 +163,7 @@ const PERSONAS = [
   { id:'C001', name:'Priya', note:'Affluent, loyal, rich fit history' },
   { id:'C002', name:'Aditi',  note:'Value-seeking, new, no fit consent' },
   { id:'C003', name:'Meera', note:'Free tier, third styling session' },
+  { id:'C004', name:'Arjun', note:'Menswear department, mid affluence' },
 ];
 const GUEST_ID = 'C000';
 
@@ -287,7 +289,7 @@ async function runSearch(){
       <div class="ph">
         ${i === 0 ? '<span class="badge">Top pick</span>' : ''}
         <span class="save">♡</span>
-        ${CAT_ICON[p.category] || '🛍️'}
+        ${p.image_url ? `<img src="${esc(p.image_url)}" alt="" loading="lazy" onerror="this.remove()">` : (CAT_ICON[p.category] || '🛍️')}
       </div>
       <div class="body">
         <div class="brand">${esc(p.brand)}</div>
@@ -304,7 +306,7 @@ async function runSearch(){
 function openProduct(p){
   $('panelBody').innerHTML = `
     <button class="close" id="closeOverlay">×</button>
-    <div class="ph">${CAT_ICON[p.category] || '🛍️'}</div>
+    <div class="ph">${p.image_url ? `<img src="${esc(p.image_url)}" alt="" onerror="this.remove()">` : (CAT_ICON[p.category] || '🛍️')}</div>
     <div class="pd-info">
       <div class="brand">${esc(p.brand)}</div>
       <h2>${esc(p.title)}</h2>
@@ -335,7 +337,7 @@ function openProduct(p){
       document.querySelectorAll('#sizeRow .size-box').forEach(box => {
         if (box.dataset.size === f.recommended_size) box.classList.add('ai-pick');
       });
-      $('sizeNote').innerHTML = `${esc(f.explanation)} <span class="why-fit" id="whyFit">Why? ▾</span><div class="why-body" id="whyFitBody">Grading offset ${f.evidence?.grading_delta_cm}cm · ${f.evidence?.observations} kept purchases · brand cut ${esc(String(f.evidence?.brand_cut || ''))}</div>`;
+      $('sizeNote').innerHTML = `${esc(f.explanation)} <span class="why-fit" id="whyFit">Why? ▾</span><div class="why-body" id="whyFitBody">Body-metric match ${f.evidence?.grading_delta}σ from typical ${f.recommended_size} · ${f.evidence?.observations} kept purchases · brand cut ${esc(String(f.evidence?.brand_cut || ''))}</div>`;
     }
     const whyFit = $('whyFit');
     if (whyFit) whyFit.onclick = () => $('whyFitBody').classList.toggle('open');

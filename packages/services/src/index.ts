@@ -32,7 +32,7 @@ app.get('/customers/:id/profile', async c => {
       FROM orders o JOIN order_items i ON i.order_id = o.id WHERE o.customer_id = ?`).bind(id),
     c.env.DB.prepare(`
       SELECT COUNT(*) n FROM order_items i JOIN products p ON p.sku = i.sku
-      WHERE i.customer_id = ? AND p.price_tier IN ('premium','core')`).bind(id),
+      WHERE i.customer_id = ? AND p.price_tier = 'premium'`).bind(id),
     c.env.DB.prepare(`SELECT COUNT(*) n FROM returns WHERE customer_id = ?`).bind(id),
     c.env.DB.prepare(`SELECT COUNT(*) n FROM returns WHERE customer_id = ? AND reason_code='size_fit'`).bind(id),
   ]);
@@ -49,6 +49,7 @@ app.get('/customers/:id/profile', async c => {
     identity: {
       id: cu.id, name: cu.name, email: cu.email, city: cu.city, joined_at: cu.joined_at,
       tenure_days: Math.round((Date.now() - new Date(cu.joined_at).getTime()) / 864e5),
+      shops_for: cu.shops_for,
     },
     consent: { fit_data: !!cu.consent_fit, marketing: !!cu.consent_marketing },
     loyalty: loyalty.results?.[0] ?? null,
@@ -104,15 +105,22 @@ app.post('/events', async c => {
 app.get('/catalogue/search', async c => {
   const q = (c.req.query('q') ?? '').toLowerCase().trim();
   const category = c.req.query('category') ?? null;
+  // 'unisex' means "no department declared" - same as no filter at all.
+  const department = c.req.query('department');
   const limit = Number(c.req.query('limit') ?? 40);
   const terms = q.split(/\s+/).filter(Boolean);
 
-  const stmt = category
-    ? c.env.DB.prepare(`
-        SELECT p.*, COALESCE((SELECT SUM(qty) FROM inventory v WHERE v.sku = p.sku),0) stock
-        FROM products p WHERE p.category = ?`).bind(category)
-    : c.env.DB.prepare(`
-        SELECT p.*, COALESCE((SELECT SUM(qty) FROM inventory v WHERE v.sku = p.sku),0) stock FROM products p`);
+  const conditions: string[] = [];
+  const binds: string[] = [];
+  if (category) { conditions.push('p.category = ?'); binds.push(category); }
+  if (department && department !== 'unisex') {
+    conditions.push("(p.department = ? OR p.department = 'unisex')");
+    binds.push(department);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const stmt = c.env.DB.prepare(`
+    SELECT p.*, COALESCE((SELECT SUM(qty) FROM inventory v WHERE v.sku = p.sku),0) stock
+    FROM products p ${where}`).bind(...binds);
   const { results } = await stmt.all();
 
   const scored = (results as any[]).map(r => {
@@ -152,18 +160,18 @@ app.get('/inventory/:sku', async c => {
   return c.json({ sku: c.req.param('sku'), sizes: results });
 });
 
-app.get('/size-charts/:brand/:category', async c => {
-  const { results } = await c.env.DB.prepare(`SELECT * FROM size_charts WHERE brand = ? AND category = ?`)
-    .bind(c.req.param('brand'), c.req.param('category')).all();
+app.get('/size-charts/:category', async c => {
+  const { results } = await c.env.DB.prepare(`SELECT * FROM size_charts WHERE category = ?`)
+    .bind(c.req.param('category')).all();
   if (!results.length) return c.json({ error: 'chart_not_found' }, 404);
-  return c.json({ brand: c.req.param('brand'), category: c.req.param('category'), grading: results });
+  return c.json({ category: c.req.param('category'), grading: results });
 });
 
 // ---------------------------------------------------------- Fit
 app.get('/fit/:customerId', async c => {
   const id = c.req.param('customerId');
   const [cust, profiles, fitReturns] = await c.env.DB.batch([
-    c.env.DB.prepare(`SELECT consent_fit FROM customers WHERE id = ?`).bind(id),
+    c.env.DB.prepare(`SELECT consent_fit, height_cm, weight_kg, age FROM customers WHERE id = ?`).bind(id),
     c.env.DB.prepare(`SELECT * FROM fit_profiles WHERE customer_id = ?`).bind(id),
     c.env.DB.prepare(`
       SELECT r.sku, r.size, r.reason_detail, p.category, p.brand, p.cut
@@ -172,7 +180,11 @@ app.get('/fit/:customerId', async c => {
   ]);
   const cu = cust.results?.[0] as any;
   if (!cu) return c.json({ error: 'customer_not_found' }, 404);
-  return c.json({ customer_id: id, consent_fit: !!cu.consent_fit, profiles: profiles.results, fit_returns: fitReturns.results });
+  return c.json({
+    customer_id: id, consent_fit: !!cu.consent_fit,
+    measurements: { height_cm: cu.height_cm, weight_kg: cu.weight_kg, age: cu.age },
+    profiles: profiles.results, fit_returns: fitReturns.results,
+  });
 });
 
 app.post('/fit/:customerId/observation', async c => {

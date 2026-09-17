@@ -8,9 +8,13 @@
 import { writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadFashionCatalog, APP_CATEGORIES, type AppCategory, type FashionCandidate } from './lib/fashion-catalog.js';
+import { loadFitmentRows, sizeStats, pickFitmentRow, pickRepresentativeRow, type AppSize } from './lib/fitment-stats.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(__dirname, '../packages/services/seed.sql');
+const FASHION_CSV = resolve(__dirname, '../Fashion Data.csv');
+const FITMENT_CSV = resolve(__dirname, '../fitment_dat.csv');
 
 let _s = 20260913 >>> 0;
 const rnd = () => {
@@ -27,26 +31,41 @@ const q = (v: unknown) => v === null || v === undefined ? 'NULL'
   : typeof v === 'number' ? String(v)
   : `'${String(v).replace(/'/g, "''")}'`;
 
-const CATEGORIES = ['dresses','tops','knitwear','outerwear','trousers','skirts','footwear','accessories'] as const;
+const CATEGORIES = APP_CATEGORIES;
 const SIZES = ['XS','S','M','L','XL'] as const;
-const BRANDS = [
-  { name:'Aurelia', tier:'premium' }, { name:'Verano', tier:'premium' },
-  { name:'Halston Row', tier:'core' }, { name:'Bexley', tier:'core' },
-  { name:'Neu Basics', tier:'private_label' }, { name:'Neu Everyday', tier:'value' },
-  { name:'Kestrel', tier:'value' },
-] as const;
-const SINGULAR: Record<string,string> = { dresses:'dress', tops:'top', knitwear:'knit', outerwear:'coat',
-  trousers:'trousers', skirts:'skirt', footwear:'shoes', accessories:'accessory' };
 const COLOURS = ['midnight','ivory','sage','rust','charcoal','plum','camel','olive'];
 const MATERIALS = ['silk blend','organic cotton','merino wool','linen','viscose','recycled poly','cashmere blend'];
 const STYLES = ['occasion','workwear','everyday','party','minimal','statement','layering','holiday'];
 const CUTS = ['runs_small','true_to_size','runs_large'] as const;
 const CHANNELS = ['web','app','store'];
-const PRICE_BANDS: Record<string,[number,number]> = { premium:[110,480], core:[45,130], private_label:[18,55], value:[9,38] };
 const REASON_MIX: Array<[string, number]> = [['size_fit',0.58],['changed_mind',0.22],['quality_defect',0.12],['other',0.08]];
 const FIT_DETAIL = ['too small on the bust','too tight on the waist','length too long','shoulders too narrow','too large overall'];
-const BASE = { XS:82, S:87, M:92, L:98, XL:105 } as const;
 const TARGET = 0.34, MONTHS = 12;
+
+/**
+ * INR->GBP conversion is a stylistic constant, not the real exchange rate: the literal
+ * ~105 rate would squash nearly every real price into the "value" tier and break the
+ * affluent-customer/premium-tier narrative the personas rely on. This divisor instead
+ * preserves the shape of the old synthetic price bands (value/private_label/core/premium).
+ */
+const INR_TO_GBP = 14;
+const PRICE_TIER_FLOORS: Array<[number, string]> = [[150, 'premium'], [65, 'core'], [35, 'private_label'], [0, 'value']];
+function convertPrice(inr: number): number {
+  return r2(Math.min(480, Math.max(6, inr / INR_TO_GBP)));
+}
+function tierForPrice(gbp: number): string {
+  return PRICE_TIER_FLOORS.find(([floor]) => gbp >= floor)![1];
+}
+
+/** Deterministic sample of up to `n` items from `pool`, without replacement. */
+function sampleN<T>(pool: readonly T[], n: number, r: () => number): T[] {
+  const copy = [...pool];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, n);
+}
 
 const now = new Date('2026-09-13T09:00:00Z');
 const daysAgo = (d: number) => new Date(now.getTime() - d * 864e5).toISOString();
@@ -61,60 +80,112 @@ function emit(table: string, cols: string[], rows: unknown[][]) {
   }
 }
 
-// ---- products + inventory + charts
-type P = { sku:string; category:string; brand:string; price:number; tier:string; cut:string };
+// ---- products + inventory (real catalog, ingested from Fashion Data.csv)
+type P = { sku:string; category:string; brand:string; price:number; tier:string; cut:string; department:string };
 const products: P[] = [];
 const pRows: unknown[][] = [], invRows: unknown[][] = [];
-for (let i = 1; i <= 1200; i++) {
-  const brand = pick(BRANDS), category = pick(CATEGORIES);
-  const [lo, hi] = PRICE_BANDS[brand.tier];
-  const price = r2(lo + rnd() * (hi - lo));
-  const colour = pick(COLOURS), cut = pick(CUTS);
-  const styles = [pick(STYLES), pick(STYLES)].filter((v, idx, a) => a.indexOf(v) === idx);
-  const sku = `SKU-${String(i).padStart(5,'0')}`;
-  const baseReturn = brand.tier === 'premium' ? 0.22 : brand.tier === 'value' ? 0.41 : 0.32;
-  const returnRate = r2(Math.min(0.62, baseReturn + (cut === 'true_to_size' ? -0.06 : 0.05) + rnd() * 0.06));
-  pRows.push([sku, `${brand.name} ${colour} ${SINGULAR[category]}`, category, brand.name, price,
-    brand.tier, colour, pick(MATERIALS), styles.join(','), cut, r2(3.2 + rnd() * 1.7), returnRate]);
-  for (const s of SIZES) invRows.push([sku, s, int(0, 40)]);
-  products.push({ sku, category, brand: brand.name, price, tier: brand.tier, cut });
+
+const PER_CATEGORY = 1200 / CATEGORIES.length; // 150
+const catalogPools = await loadFashionCatalog(FASHION_CSV, { rnd, reservoirSize: 4000 });
+
+const picked: Record<AppCategory, FashionCandidate[]> = Object.fromEntries(
+  CATEGORIES.map(cat => [cat, sampleN(catalogPools[cat], PER_CATEGORY, rnd)]),
+) as Record<AppCategory, FashionCandidate[]>;
+
+let shortfall = CATEGORIES.reduce((n, cat) => n + (PER_CATEGORY - picked[cat].length), 0);
+for (const cat of CATEGORIES) {
+  if (shortfall <= 0) break;
+  const already = new Set(picked[cat].map(c => `${c.brand}|${c.title}`));
+  const extra = sampleN(catalogPools[cat].filter(c => !already.has(`${c.brand}|${c.title}`)), shortfall, rnd);
+  picked[cat].push(...extra);
+  shortfall -= extra.length;
 }
-emit('products', ['sku','title','category','brand','price_gbp','price_tier','colour','material','style_tags','cut','rating','return_rate'], pRows);
+if (shortfall > 0) {
+  throw new Error(`Fashion Data.csv did not yield enough real candidates: ${shortfall} short of 1200`);
+}
+
+let skuCounter = 1;
+for (const cat of CATEGORIES) {
+  for (const cand of picked[cat]) {
+    const sku = `SKU-${String(skuCounter++).padStart(5, '0')}`;
+    const price = convertPrice(cand.priceInr);
+    const tier = tierForPrice(price);
+    const colour = cand.colour ?? pick(COLOURS);
+    const cut = pick(CUTS);
+    const material = cand.materialHint ?? pick(MATERIALS);
+    const styles = [pick(STYLES), pick(STYLES)].filter((v, idx, a) => a.indexOf(v) === idx);
+    const baseReturn = tier === 'premium' ? 0.22 : tier === 'value' ? 0.41 : 0.32;
+    const returnRate = r2(Math.min(0.62, baseReturn + (cut === 'true_to_size' ? -0.06 : 0.05) + rnd() * 0.06));
+    pRows.push([sku, cand.title, cat, cand.brand, price, tier, colour, material, styles.join(','), cut,
+      r2(3.2 + rnd() * 1.7), returnRate, cand.imageUrl, cand.department]);
+    for (const s of SIZES) invRows.push([sku, s, int(0, 40)]);
+    products.push({ sku, category: cat, brand: cand.brand, price, tier, cut, department: cand.department });
+  }
+}
+emit('products', ['sku','title','category','brand','price_gbp','price_tier','colour','material','style_tags','cut','rating','return_rate','image_url','department'], pRows);
 emit('inventory', ['sku','size','qty'], invRows);
 
+// ---- size charts: real per-(category,size) weight/height bands, not invented cm offsets
+const fitmentBySize = loadFitmentRows(FITMENT_CSV);
+const sizeStatsBySize = Object.fromEntries(SIZES.map(s => [s, sizeStats(fitmentBySize[s])])) as
+  Record<AppSize, ReturnType<typeof sizeStats>>;
+
 const chartRows: unknown[][] = [];
-for (const b of BRANDS) for (const cat of CATEGORIES) for (const s of SIZES) {
-  const off = b.tier === 'premium' ? -2.5 : b.tier === 'value' ? 2.5 : 0;
-  chartRows.push([b.name, cat, s, BASE[s] + off, BASE[s] - 18 + off, BASE[s] + 6 + off, 2.0]);
+for (const cat of CATEGORIES) for (const s of SIZES) {
+  const st = sizeStatsBySize[s];
+  chartRows.push([cat, s, r2(st.weightMean), r2(st.weightStdev), r2(st.heightMean), r2(st.heightStdev)]);
 }
-emit('size_charts', ['brand','category','size','bust_cm','waist_cm','hip_cm','grading_tolerance_cm'], chartRows);
+emit('size_charts', ['category','size','weight_kg_avg','weight_kg_stdev','height_cm_avg','height_cm_stdev'], chartRows);
 
 // ---- customers
-type Cust = { id:string; affluence:string; orders:number; tenure:number; fit:string; consentFit:number };
+type Cust = { id:string; affluence:string; orders:number; tenure:number; fit:string; consentFit:number; shopsFor:string };
 const PERSONAS = [
   { id:'C001', name:'Priya Raman', email:'priya.raman@example.com', city:'London', affluence:'affluent',
-    tenure:38, orders:24, fit:'rich', consentFit:1, sub:'plus', styling:9,
+    tenure:38, orders:24, fit:'rich', consentFit:1, sub:'plus', styling:9, shopsFor:'women',
     note:'AFFLUENT + LOYAL + rich fit history. Premium ranking, high-confidence fit call.' },
   { id:'C002', name:'Aditi Sharma', email:'aditi.sharma@example.com', city:'Leeds', affluence:'value_seeking',
-    tenure:2, orders:2, fit:'none', consentFit:0, sub:'free', styling:0,
+    tenure:2, orders:2, fit:'none', consentFit:0, sub:'free', styling:0, shopsFor:'women',
     note:'LESS AFFLUENT + NEW + no fit history and no consent. Value ranking, fit agent abstains.' },
   { id:'C003', name:'Meera Iyer', email:'meera.iyer@example.com', city:'Manchester', affluence:'mid',
-    tenure:14, orders:9, fit:'rich', consentFit:1, sub:'free', styling:3,
+    tenure:14, orders:9, fit:'rich', consentFit:1, sub:'free', styling:3, shopsFor:'women',
     note:'UPSELL TRIGGER. Third free Styling Advisory session -> Plus offer -> 2x loyalty accrual.' },
+  { id:'C004', name:'Arjun Mehta', email:'arjun.mehta@example.com', city:'Birmingham', affluence:'mid',
+    tenure:22, orders:14, fit:'rich', consentFit:1, sub:'free', styling:1, shopsFor:'men',
+    note:'MENSWEAR. Proves catalogue.search department filtering: his results and his own order '
+      + 'history never carry a womenswear SKU. Mid affluence, developing loyalty - distinct from '
+      + "Priya's affluent-loyal story and Meera's upsell-trigger story." },
   // Appended last, not inserted earlier: its declared* fields below are fixed literals
   // rather than spendFor/aupFor/premFor, and every count here is 0, so it draws zero
   // extra numbers from the shared PRNG - C001/C002/C003's own generated data (and every
   // number quoted about them in README.md/DEMO.md) is unaffected by this entry existing.
   { id:'C000', name:'Guest Visitor', email:'guest@example.com', city:'London', affluence:'value_seeking',
-    tenure:0, orders:0, fit:'none', consentFit:0, sub:'free', styling:0,
+    tenure:0, orders:0, fit:'none', consentFit:0, sub:'free', styling:0, shopsFor:'unisex',
     declaredSpend:180, declaredAup:22, declaredPremium:0.04,
     note:'GUEST. No order or fit history - a brand-new anonymous visitor. Thin-history ranking, fit agent abstains, no subscription/loyalty offer until signed in.' },
 ];
-const NAMES = ['Nisha Kapoor','Tom Whitfield','Grace Okoro','Dan Lawson','Aiko Tanaka','Ravi Menon','Sofia Duarte',
- 'Callum Reid','Elena Petrova','Marcus Bell','Hana Yilmaz','Jonah Price','Leila Haddad','Owen Shaw','Freya Lindqvist',
- 'Amara Diallo','Ben Costa','Ingrid Moss','Sanjay Pillai','Clara Ferreira','Noor Rahman','Ethan Crowe','Mei Lin',
- 'Patrick Doyle','Zara Ahmed','Luca Romano','Bethany Hart','Kofi Mensah','Rosa Vega','Simon Aldridge','Tanvi Desai',
- 'Rachel Byrne','Idris Olawale','Katya Sokolova','Will Hargreaves','Priti Nair','Andre Baptiste'];
+// Hand-tagged, not inferred - each background persona gets an explicit department so its
+// own generated order/return history (and anything discovery shows it) never crosses.
+const NAMES: Array<{ name: string; shopsFor: 'women' | 'men' }> = [
+  { name:'Nisha Kapoor', shopsFor:'women' }, { name:'Tom Whitfield', shopsFor:'men' },
+  { name:'Grace Okoro', shopsFor:'women' }, { name:'Dan Lawson', shopsFor:'men' },
+  { name:'Aiko Tanaka', shopsFor:'women' }, { name:'Ravi Menon', shopsFor:'men' },
+  { name:'Sofia Duarte', shopsFor:'women' }, { name:'Callum Reid', shopsFor:'men' },
+  { name:'Elena Petrova', shopsFor:'women' }, { name:'Marcus Bell', shopsFor:'men' },
+  { name:'Hana Yilmaz', shopsFor:'women' }, { name:'Jonah Price', shopsFor:'men' },
+  { name:'Leila Haddad', shopsFor:'women' }, { name:'Owen Shaw', shopsFor:'men' },
+  { name:'Freya Lindqvist', shopsFor:'women' }, { name:'Amara Diallo', shopsFor:'women' },
+  { name:'Ben Costa', shopsFor:'men' }, { name:'Ingrid Moss', shopsFor:'women' },
+  { name:'Sanjay Pillai', shopsFor:'men' }, { name:'Clara Ferreira', shopsFor:'women' },
+  { name:'Noor Rahman', shopsFor:'women' }, { name:'Ethan Crowe', shopsFor:'men' },
+  { name:'Mei Lin', shopsFor:'women' }, { name:'Patrick Doyle', shopsFor:'men' },
+  { name:'Zara Ahmed', shopsFor:'women' }, { name:'Luca Romano', shopsFor:'men' },
+  { name:'Bethany Hart', shopsFor:'women' }, { name:'Kofi Mensah', shopsFor:'men' },
+  { name:'Rosa Vega', shopsFor:'women' }, { name:'Simon Aldridge', shopsFor:'men' },
+  { name:'Tanvi Desai', shopsFor:'women' }, { name:'Rachel Byrne', shopsFor:'women' },
+  { name:'Idris Olawale', shopsFor:'men' }, { name:'Katya Sokolova', shopsFor:'women' },
+  { name:'Will Hargreaves', shopsFor:'men' }, { name:'Priti Nair', shopsFor:'women' },
+  { name:'Andre Baptiste', shopsFor:'men' },
+];
 const CITIES = ['London','Manchester','Birmingham','Bristol','Leeds','Glasgow','Cardiff','Edinburgh','Nottingham','Brighton'];
 
 const tierFor = (lt:number) => lt > 9000 ? 'Platinum' : lt > 4500 ? 'Gold' : lt > 1500 ? 'Silver' : 'Bronze';
@@ -129,40 +200,49 @@ for (const p of PERSONAS) {
   cRows.push([p.id, p.name, p.email, p.city, daysAgo(p.tenure*30),
     p.declaredSpend ?? spendFor(p.affluence),
     p.declaredAup ?? aupFor(p.affluence),
-    p.declaredPremium ?? premFor(p.affluence), p.consentFit, 1, p.note]);
+    p.declaredPremium ?? premFor(p.affluence), p.consentFit, 1, p.note, p.shopsFor]);
   lRows.push([p.id, tierFor(lifetime), Math.round(lifetime*0.35), lifetime,
     p.affluence === 'affluent' ? 0.84 : p.affluence === 'mid' ? 0.58 : 0.21,
     lifetime > 4500 ? 9000 - lifetime : 4500 - lifetime]);
   sRows.push([p.id, p.sub, p.sub === 'plus' ? 4.99 : p.sub === 'premium' ? 9.99 : 0,
     p.sub === 'free' ? null : daysAgo(120), null, 0]);
-  customers.push({ id: p.id, affluence: p.affluence, orders: p.orders, tenure: p.tenure, fit: p.fit, consentFit: p.consentFit });
+  customers.push({ id: p.id, affluence: p.affluence, orders: p.orders, tenure: p.tenure, fit: p.fit, consentFit: p.consentFit, shopsFor: p.shopsFor });
 }
-NAMES.forEach((name, i) => {
-  const id = `C${String(i+4).padStart(3,'0')}`;
+NAMES.forEach(({ name, shopsFor }, i) => {
+  const id = `C${String(i+5).padStart(3,'0')}`;
   const affluence = i % 3 === 0 ? 'affluent' : i % 3 === 1 ? 'mid' : 'value_seeking';
   const tenure = int(1,48), orders = tenure < 4 ? int(1,3) : int(4,26);
   const lifetime = affluence === 'affluent' ? int(4000,12000) : affluence === 'mid' ? int(1200,4400) : int(80,1400);
   const consentFit = rnd() > 0.3 ? 1 : 0;
   cRows.push([id, name, `${name.toLowerCase().replace(/[^a-z]+/g,'.')}@example.com`, pick(CITIES),
-    daysAgo(tenure*30), spendFor(affluence), aupFor(affluence), premFor(affluence), consentFit, rnd() > 0.2 ? 1 : 0, null]);
+    daysAgo(tenure*30), spendFor(affluence), aupFor(affluence), premFor(affluence), consentFit, rnd() > 0.2 ? 1 : 0, null, shopsFor]);
   lRows.push([id, tierFor(lifetime), Math.round(lifetime*0.3), lifetime, r2(rnd()),
     lifetime > 4500 ? Math.max(0, 9000-lifetime) : Math.max(0, 4500-lifetime)]);
   const sub = rnd() > 0.88 ? 'plus' : 'free';
   sRows.push([id, sub, sub === 'plus' ? 4.99 : 0, sub === 'free' ? null : daysAgo(int(30,300)), null, int(0,2)]);
-  customers.push({ id, affluence, orders, tenure, fit: orders > 6 && consentFit ? 'rich' : orders > 2 ? 'thin' : 'none', consentFit });
+  customers.push({ id, affluence, orders, tenure, fit: orders > 6 && consentFit ? 'rich' : orders > 2 ? 'thin' : 'none', consentFit, shopsFor });
 });
-emit('customers', ['id','name','email','city','joined_at','annual_spend_gbp','avg_unit_price_gbp','premium_share','consent_fit','consent_marketing','seed_persona'], cRows);
+// `customers` emit happens after fitObs exists below - height/weight/age are sampled
+// from real fitment_dat.csv rows matching each customer's own purchase-size history.
 emit('loyalty_accounts', ['customer_id','tier','points_balance','lifetime_points','engagement_score','points_to_next_tier'], lRows);
 emit('subscriptions', ['customer_id','tier','price_gbp_month','started_at','last_offer_at','offers_declined'], sRows);
 
 // ---- orders, items, returns
-const premiumPool = products.filter(p => ['premium','core'].includes(p.tier));
-const valuePool = products.filter(p => ['value','private_label','core'].includes(p.tier));
+// Own purchase history must stay in the customer's own department too, or the same
+// men's-item-shown-to-a-woman bug just reappears one layer down, in her own order list.
+const deptPool = (dept: string) => products.filter(p => p.department === dept || p.department === 'unisex');
+const poolFor = (c: Cust) => {
+  const byDept = deptPool(c.shopsFor);
+  const byTier = c.affluence === 'affluent' ? byDept.filter(p => ['premium','core'].includes(p.tier))
+    : c.affluence === 'mid' ? byDept
+    : byDept.filter(p => ['value','private_label','core'].includes(p.tier));
+  return byTier.length ? byTier : byDept;
+};
 type Line = { itemId:string; customerId:string; orderId:string; sku:string; size:string; category:string };
 const lines: Line[] = [];
 const oRows: unknown[][] = [], iRows: unknown[][] = [];
 for (const c of customers) {
-  const pool = c.affluence === 'affluent' ? premiumPool : c.affluence === 'mid' ? products : valuePool;
+  const pool = poolFor(c);
   const window = Math.min(MONTHS*30, c.tenure*30);
   for (let o = 0; o < c.orders; o++) {
     const orderId = `ORD-${c.id}-${String(o+1).padStart(3,'0')}`;
@@ -206,6 +286,23 @@ for (const l of lines) {
 }
 emit('returns', ['id','order_item_id','order_id','customer_id','sku','size','returned_at','reason_code','reason_detail'], rRows);
 
+// ---- customers: real height/weight/age, sampled from fitment_dat.csv now that each
+// customer's kept-purchase size history (fitObs) exists to condition the sample on.
+function modeSize(customerId: string): AppSize | null {
+  const counts: Partial<Record<AppSize, number>> = {};
+  for (const o of fitObs.get(customerId) ?? []) if (o.kept) counts[o.size as AppSize] = (counts[o.size as AppSize] ?? 0) + 1;
+  const top = (Object.entries(counts) as [AppSize, number][]).sort((a, b) => b[1] - a[1])[0];
+  return top?.[0] ?? null;
+}
+customers.forEach((c, idx) => {
+  const isDemoPersona = c.id === 'C001' || c.id === 'C003' || c.id === 'C004';
+  const dominant: AppSize = c.id === 'C001' ? 'M' : c.id === 'C003' ? 'S' : c.id === 'C004' ? 'L'
+    : (modeSize(c.id) ?? pick(SIZES));
+  const body = isDemoPersona ? pickRepresentativeRow(fitmentBySize, dominant) : pickFitmentRow(fitmentBySize, dominant, rnd);
+  cRows[idx].push(r2(body.height), r2(body.weight), Math.round(body.age));
+});
+emit('customers', ['id','name','email','city','joined_at','annual_spend_gbp','avg_unit_price_gbp','premium_share','consent_fit','consent_marketing','seed_persona','shops_for','height_cm','weight_kg','age'], cRows);
+
 // ---- fit profiles
 const fRows: unknown[][] = [];
 for (const c of customers) {
@@ -219,15 +316,13 @@ for (const c of customers) {
     const [size, count] = Object.entries(sizes).sort((a,b) => b[1]-a[1])[0] ?? [];
     if (!size) continue;
     if (c.fit === 'thin' && count < 2) continue;
-    const base = BASE[size as keyof typeof BASE];
-    fRows.push([c.id, category, size, rnd() > 0.7 ? 'relaxed' : 'regular',
-      base + r2(rnd()*2-1), base - 18 + r2(rnd()*2-1), base + 6 + r2(rnd()*2-1), count, daysAgo(int(3,60))]);
+    fRows.push([c.id, category, size, rnd() > 0.7 ? 'relaxed' : 'regular', count, daysAgo(int(3,60))]);
   }
 }
 // Demo personas get guaranteed, hand-set fit history in the demo category.
-fRows.push(['C001','dresses','M','regular',91.5,73.0,97.5,7,daysAgo(11)]);
-fRows.push(['C003','dresses','S','relaxed',86.0,68.5,92.0,4,daysAgo(23)]);
-emit('fit_profiles', ['customer_id','category','preferred_size','fit_preference','bust_cm','waist_cm','hip_cm','observations','updated_at'], fRows);
+fRows.push(['C001','dresses','M','regular',7,daysAgo(11)]);
+fRows.push(['C003','dresses','S','relaxed',4,daysAgo(23)]);
+emit('fit_profiles', ['customer_id','category','preferred_size','fit_preference','observations','updated_at'], fRows);
 
 // ---- events + feature usage
 const EVENT_TYPES = ['session.start','search.query','pdp.view','basket.add','wishlist.add','loyalty.view'];

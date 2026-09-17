@@ -61,7 +61,8 @@ export const BUNDLED: ToolContract[] = [
       "sku": "string",
       "title": "string",
       "price_gbp": "number",
-      "cut": "string"
+      "cut": "string",
+      "image_url": "string"
     },
     "transport": {
       "service": "services",
@@ -84,6 +85,11 @@ export const BUNDLED: ToolContract[] = [
       "category": {
         "type": "string",
         "required": false
+      },
+      "department": {
+        "type": "string",
+        "required": false,
+        "description": "'women' | 'men' | 'unisex' - hard-filters out the opposite department, unisex products always included"
       },
       "limit": {
         "type": "integer",
@@ -111,7 +117,8 @@ export const BUNDLED: ToolContract[] = [
       "discovery",
       "fit",
       "upsell",
-      "loyalty"
+      "loyalty",
+      "orchestrator"
     ],
     "input_schema": {
       "customer_id": {
@@ -290,6 +297,7 @@ export const BUNDLED: ToolContract[] = [
     },
     "output_schema": {
       "consent_fit": "boolean",
+      "measurements": "object",
       "profiles": "array",
       "fit_returns": "array"
     },
@@ -302,28 +310,24 @@ export const BUNDLED: ToolContract[] = [
   {
     "name": "fit.sizechart.get",
     "version": "1.0.0",
-    "purpose": "Brand- and category-specific grading table with tolerance.",
+    "purpose": "Real per-category weight/height size bands, derived from a ~120k-row anthropometric dataset. Brand nuance is applied separately via the product's own cut.",
     "allowed_agents": [
       "fit"
     ],
     "input_schema": {
-      "brand": {
-        "type": "string",
-        "required": true
-      },
       "category": {
         "type": "string",
         "required": true
       }
     },
     "output_schema": {
-      "brand": "string",
+      "category": "string",
       "grading": "array"
     },
     "transport": {
       "service": "services",
       "method": "GET",
-      "path": "/size-charts/{brand}/{category}"
+      "path": "/size-charts/{category}"
     }
   },
   {

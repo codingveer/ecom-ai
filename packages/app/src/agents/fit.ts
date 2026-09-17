@@ -43,14 +43,18 @@ export async function recommend(k: Kernel, customerId: string, sku: string | nul
   }
 
   const brand = product?.brand ?? 'Aurelia';
-  const chart = await k.invoke<any>('fit.sizechart.get', { brand, category: cat }, 'S3.9');
+  const chart = await k.invoke<any>('fit.sizechart.get', { category: cat }, 'S3.9');
 
-  // Match the customer's measurements against this brand's grading table.
-  const graded = (chart.grading as any[]).map(g => ({
-    size: g.size,
-    delta: Math.abs((g.bust_cm ?? 0) - (profile.bust_cm ?? 0)) + Math.abs((g.waist_cm ?? 0) - (profile.waist_cm ?? 0)),
-    tolerance: g.grading_tolerance_cm,
-  })).sort((a, b) => a.delta - b.delta);
+  // Match the customer's real height/weight against this category's real size bands
+  // (fitment_dat.csv, ~120k rows), as a normalised distance in standard deviations -
+  // the same role bust/waist cm delta used to play, now grounded in real data.
+  const height = fit.measurements?.height_cm ?? null;
+  const weight = fit.measurements?.weight_kg ?? null;
+  const graded = (chart.grading as any[]).map(g => {
+    const heightZ = height != null && g.height_cm_stdev > 0 ? Math.abs(height - g.height_cm_avg) / g.height_cm_stdev : 0;
+    const weightZ = weight != null && g.weight_kg_stdev > 0 ? Math.abs(weight - g.weight_kg_avg) / g.weight_kg_stdev : 0;
+    return { size: g.size, delta: (heightZ + weightZ) / 2, tolerance: 1.0 };
+  }).sort((a, b) => a.delta - b.delta);
   const best = graded[0];
 
   // Cut adjustment: a brand that runs small pushes the recommendation up a size.
@@ -74,7 +78,7 @@ export async function recommend(k: Kernel, customerId: string, sku: string | nul
   const abstained = confidence < FIT_CONFIDENCE_THRESHOLD;
   const explanation = await k.llm('fit.explanation', {
     history: `${profile.observations} kept purchases in ${cat}, usual size ${profile.preferred_size}, ${profile.fit_preference} fit preference`,
-    brand, cut, category: cat, offset: best.delta.toFixed(1),
+    brand, cut, category: cat, offset: best.delta.toFixed(2),
     size, confidence, threshold: FIT_CONFIDENCE_THRESHOLD,
   }, 'S3.11');
 
@@ -90,7 +94,7 @@ export async function recommend(k: Kernel, customerId: string, sku: string | nul
   const returnsAvoidedPp = abstained ? 0 : Math.round(9.6 * (confidence / 100) * 10) / 10;
 
   k.note('agent', abstained ? 'ABSTAINED - below confidence threshold' : `size ${size} at ${confidence}%`,
-    { grading_delta_cm: best.delta, prior_fit_returns_this_brand: priorFitReturns.filter(r => r.brand === brand).length },
+    { grading_delta: best.delta, prior_fit_returns_this_brand: priorFitReturns.filter(r => r.brand === brand).length },
     'S3.11');
 
   return {
@@ -100,7 +104,8 @@ export async function recommend(k: Kernel, customerId: string, sku: string | nul
     evidence: {
       observations: profile.observations, usual_size: profile.preferred_size,
       fit_preference: profile.fit_preference, brand_cut: cut,
-      grading_delta_cm: Math.round(best.delta * 10) / 10,
+      grading_delta: Math.round(best.delta * 100) / 100,
+      height_cm: height, weight_kg: weight,
       prior_fit_returns: priorFitReturns.length,
     },
     returns_avoided_pp: returnsAvoidedPp,

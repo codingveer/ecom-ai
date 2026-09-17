@@ -12,12 +12,12 @@ export const PROMPTS: Prompt[] = [
   },
   {
     "id": "fit.explanation",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "owner": "fit",
     "model_class": "reasoning",
     "system": "You explain a size recommendation to a shopper in at most two sentences. Be concrete about the evidence. If confidence is below threshold, say plainly that no recommendation is being made and offer the size guide instead.",
-    "template": "Customer size history: {{history}}\nBrand: {{brand}} ({{cut}}), category {{category}}\nGrading offset vs. customer profile: {{offset}} cm\nRecommendation: {{size}} at {{confidence}}% confidence (threshold {{threshold}}%)\nWrite the explanation.",
-    "changelog": "1.0.0 initial"
+    "template": "Customer size history: {{history}}\nBrand: {{brand}} ({{cut}}), category {{category}}\nMatch distance vs. this category's real height/weight band (0 = typical, in standard deviations): {{offset}}\nRecommendation: {{size}} at {{confidence}}% confidence (threshold {{threshold}}%)\nWrite the explanation.",
+    "changelog": "1.0.0 initial, 1.0.1 grading distance now measured against real height/weight bands instead of invented cm offsets"
   },
   {
     "id": "intent.classify",
