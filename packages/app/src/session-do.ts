@@ -297,6 +297,18 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
     // Customer-switch transcript wipe (this.sessions.session().clearMessages()) now
     // happens inside handleTurn itself, right where customerSwitched is computed - see
     // the comment there. Both onRequest and onChatMessage get it for free from one place.
+    //
+    // AIChatAgent persists an incoming user message to storage BEFORE calling
+    // onChatMessage (see @cloudflare/ai-chat's persistMessages(...) ahead of
+    // _runExclusiveChatTurn), so `last` above is already a durable row by the time
+    // handleTurn's clearMessages() runs. On a customer switch that wipes the just-sent
+    // message along with the previous customer's history. Restore it: upsertMessage
+    // does a plain SQL append/notify, same as clearMessages, so it's equally safe to
+    // await synchronously here (it never touches AIChatAgent's turn queue). `parentId:
+    // null` is explicit, not relied-upon auto-detection, since the transcript is empty.
+    if (result.ok && result.customerSwitched && last) {
+      await this.sessions.session().upsertMessage(last, { parentId: null });
+    }
 
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
