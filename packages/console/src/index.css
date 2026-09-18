@@ -1,0 +1,61 @@
+:root{
+  --ink:#101A3D; --paper:#fff; --rule:#DBDFEC; --mute:#5E6684;
+  --front:#F4F6FB; --violet:#5B4B9E; --teal:#0E7C7B; --coral:#D9451F; --amber:#8A6A12;
+}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+     color:var(--ink);background:var(--paper);height:100vh;display:flex;flex-direction:column}
+header{border-bottom:1px solid var(--rule);padding:14px 22px;display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+h1{font-size:16px;margin:0;font-weight:650;letter-spacing:-.01em}
+.sub{color:var(--mute);font-size:13px}
+.personas{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.persona{border:1px solid var(--rule);background:#fff;border-radius:999px;padding:6px 13px;cursor:pointer;
+         font-size:13px;color:var(--ink);transition:background .12s,border-color .12s}
+.persona:hover{background:var(--front)}
+.persona[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.persona:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+
+main{flex:1;display:grid;grid-template-columns:minmax(340px,44fr) 0 minmax(380px,56fr);min-height:0}
+.front{background:var(--front);display:flex;flex-direction:column;min-height:0}
+.visibility{position:relative;background:transparent}
+.visibility::before{content:"";position:absolute;inset:0 auto 0 -1px;border-left:2px dashed var(--rule)}
+.visibility span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg);
+  transform-origin:center;white-space:nowrap;font-size:10.5px;letter-spacing:.16em;color:var(--mute);
+  background:var(--paper);padding:5px 9px}
+
+.panehead{padding:11px 20px;border-bottom:1px solid var(--rule);font-size:12.5px;color:var(--mute)}
+.stream{flex:1;overflow:auto;padding:18px 20px;min-height:0}
+
+.msg{margin-bottom:16px;max-width:56ch}
+.msg.you{margin-left:auto;text-align:right}
+.msg .who{font-size:11.5px;color:var(--mute);margin-bottom:4px}
+.bubble{display:inline-block;text-align:left;padding:11px 14px;border-radius:12px;white-space:pre-wrap}
+.you .bubble{background:var(--ink);color:#fff;border-bottom-right-radius:4px}
+.bot .bubble{background:#fff;border:1px solid var(--rule);border-bottom-left-radius:4px;
+             font-family:Georgia,"Iowan Old Style",serif;font-size:15.5px;line-height:1.6}
+
+.composer{border-top:1px solid var(--rule);padding:12px;display:flex;gap:9px;background:#fff}
+input[type=text]{flex:1;border:1px solid var(--rule);border-radius:9px;padding:10px 13px;font:inherit;color:inherit}
+input[type=text]:focus-visible{outline:2px solid var(--violet);outline-offset:1px}
+button.send{border:0;background:var(--ink);color:#fff;border-radius:9px;padding:10px 17px;font:inherit;cursor:pointer}
+button.send:disabled{opacity:.45;cursor:default}
+.chips{display:flex;gap:7px;flex-wrap:wrap;padding:0 12px 11px;background:#fff}
+.chip{border:1px solid var(--rule);background:#fff;border-radius:7px;padding:5px 10px;font-size:12.5px;cursor:pointer;color:var(--mute)}
+.chip:hover{color:var(--ink);border-color:var(--mute)}
+
+.step{display:grid;grid-template-columns:34px 96px 1fr;gap:11px;padding:8px 0;border-bottom:1px solid #EEF0F6;font-size:13px}
+.n{color:#A6ADC4;font-variant-numeric:tabular-nums;font-size:12px;padding-top:2px}
+.badge{font-size:10.5px;letter-spacing:.07em;padding:3px 0;color:var(--mute);padding-top:3px}
+.badge.tool{color:var(--teal)} .badge.llm{color:var(--violet)}
+.badge.policy{color:var(--amber)} .badge.intent{color:var(--ink)} .badge.memory{color:var(--mute)}
+.label{font-weight:550}
+.detail{color:var(--mute);font-size:12px;margin-top:2px;word-break:break-word}
+.ref{display:inline-block;margin-left:7px;font-size:10.5px;color:var(--violet);border:1px solid #DDD8EE;
+     border-radius:4px;padding:1px 5px;vertical-align:1px}
+.ms{float:right;color:#A6ADC4;font-size:11.5px;font-variant-numeric:tabular-nums}
+.blocked .label{color:var(--coral)}
+.meter{border-top:1px solid var(--rule);padding:9px 20px;font-size:12px;color:var(--mute);
+       display:flex;gap:20px;flex-wrap:wrap;background:#fff}
+.meter b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.empty{color:var(--mute);font-size:13.5px;max-width:44ch}
+@media (max-width:900px){main{grid-template-columns:1fr}.visibility{display:none}}
