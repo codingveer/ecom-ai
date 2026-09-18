@@ -68,6 +68,34 @@ app.get('/health', async c => {
   });
 });
 
+app.get('/admin/products', async c => {
+  const k = new Kernel('admin', new Trace(), c.env);
+  const args: Record<string, unknown> = {};
+  for (const key of ['q', 'category', 'department', 'page', 'pageSize']) {
+    const v = c.req.query(key);
+    if (v) args[key] = v;
+  }
+  try {
+    return c.json(await k.invoke('catalogue.admin.list', args));
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
+app.get('/admin/products/:sku', async c => {
+  const k = new Kernel('admin', new Trace(), c.env);
+  try {
+    return c.json(await k.invoke('catalogue.admin.get', { sku: c.req.param('sku') }));
+  } catch (e) { return c.json({ error: String(e) }, 404); }
+});
+
+app.post('/admin/products/:sku', async c => {
+  const k = new Kernel('admin', new Trace(), c.env);
+  let body: any;
+  try { body = await c.req.json(); } catch { return c.json({ error: 'invalid_json' }, 400); }
+  try {
+    return c.json(await k.invoke('catalogue.admin.update', { sku: c.req.param('sku'), ...body }));
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
 app.all('*', c => c.env.ASSETS.fetch(c.req.raw));
 
 export default app;
