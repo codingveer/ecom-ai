@@ -262,8 +262,22 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
 
     if (result.ok && result.customerSwitched) {
       // A different customer arrived on this session id - the visible transcript must
-      // wipe too, not just the working memory handleTurn already reset.
-      await this.saveMessages([]);
+      // wipe too, not just the working memory handleTurn already reset. This is
+      // `this.sessions.session().clearMessages()`, NOT `await this.saveMessages([])`:
+      // saveMessages() acquires AIChatAgent's exclusive per-session turn queue
+      // (_runExclusiveChatTurn -> TurnQueue.enqueue in node_modules/agents/dist/chat/
+      // index.js), and awaiting it from inside onChatMessage - which is itself already
+      // running inside that same queue slot - is a circular wait that wedges the DO
+      // forever. It also would not even work: persistMessages([]) merges an empty
+      // incoming list onto the existing transcript instead of replacing it (no
+      // `_deleteStaleRows`), so no rows are actually deleted or changed.
+      // `sessions.session()` returns the exact same handle AIChatAgent keeps as its
+      // private `#session` (see its constructor: `this.#session = this.sessions.session()`),
+      // and `clearMessages()` does a real `DELETE FROM cf_agents_session_messages ...`
+      // then notifies the change feed with `{ type: 'clear' }` - which is exactly what
+      // `this.messages = []` reacts to (see #subscribeToSessionChanges). It never
+      // touches `_turnQueue`, so it is safe to await synchronously, right here.
+      await this.sessions.session().clearMessages();
     }
 
     const stream = createUIMessageStream({
