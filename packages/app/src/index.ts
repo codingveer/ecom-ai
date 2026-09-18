@@ -7,10 +7,10 @@
 import { Hono } from 'hono';
 import { Kernel, Trace, type GatewayBindings } from './kernel.js';
 
-type Env = GatewayBindings & { SESSION: DurableObjectNamespace; ASSETS: Fetcher };
+type Env = GatewayBindings & { SessionAgent: DurableObjectNamespace; ASSETS: Fetcher };
 const app = new Hono<{ Bindings: Env }>();
 
-const session = (env: Env, id: string) => env.SESSION.get(env.SESSION.idFromName(id));
+const session = (env: Env, id: string) => env.SessionAgent.get(env.SessionAgent.idFromName(id));
 
 app.post('/session/:id/message', async c => {
   let body: any;
@@ -99,4 +99,4 @@ app.post('/admin/products/:sku', async c => {
 app.all('*', c => c.env.ASSETS.fetch(c.req.raw));
 
 export default app;
-export { SessionDO } from './session-do.js';
+export { SessionAgent } from './session-do.js';

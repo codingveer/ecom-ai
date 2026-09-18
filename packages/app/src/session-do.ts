@@ -1,25 +1,25 @@
 /**
- * Session Durable Object - one instance per session, globally unique.
+ * Session Agent - one Durable Object instance per session, globally unique.
  *
- * This is the biggest architectural gain from the move. In the Node build, session
- * state was a Map in one process: it could not survive a restart, could not scale past
- * one instance, and two concurrent turns from the same customer could interleave.
- *
- * A Durable Object is a single-threaded actor with its own durable storage. Turns for
- * one session are serialised by the platform, state survives eviction and deploys, and
- * the "conversations don't get mixed up" property is structural rather than something
- * we have to be careful about.
- *
- * Orchestration runs inside the DO so the session context and the agents that read it
- * live in the same place.
+ * Rebased onto AIChatAgent (Cloudflare's `agents` package) purely as a transport and
+ * persistence wrapper: AIChatAgent's own AI-loop (onChatMessage driving streamText with
+ * tools) is NOT used, because this app's "chat" is five separate hand-written agent
+ * modules with bespoke control flow, not a single model call. `handleTurn` below is
+ * the entire orchestrator, completely unchanged from the pre-AIChatAgent version, and
+ * is called from both the plain-HTTP `onRequest` path (used by scripts/smoke.ts and any
+ * direct curl) and the new chat-protocol `onChatMessage` path (added in a later task).
  *
  * MEMORY MODEL
- *   Within a session  (this DO's storage): turn history with detected intents,
+ *   Within a session  (this DO's own ctx.storage): turn history with detected intents,
  *     resolved segment, last category, last SKU shown, pending offer.
  *   Across sessions   (D1, via the context service): segment and propensity scores,
  *     last discovery query, confirmed fit recommendations, entitlement, engagement.
+ *   AIChatAgent's own message persistence (this.messages) is a THIRD, separate store -
+ *     just the visible chat transcript, used for reconnect/replay. It is never read by
+ *     handleTurn and never substitutes for the two stores above.
  */
-import { Kernel, Trace, type GatewayBindings } from './kernel.js';
+import { AIChatAgent } from '@cloudflare/ai-chat';
+import { Kernel, Trace, type GatewayBindings, type TraceStep } from './kernel.js';
 import * as profiling from './agents/profiling.js';
 import * as discovery from './agents/discovery.js';
 import * as fit from './agents/fit.js';
@@ -37,31 +37,30 @@ type Working = {
 };
 type State = { customerId: string | null; startedAt: string; turns: Turn[]; working: Working };
 
+type TurnFlags = { unsafeRanking?: boolean; semanticSearch?: boolean };
+export type TurnResult =
+  | {
+      ok: true; reply: string; intent: string; intent_confidence: number; agent: string;
+      payload: unknown; trace: TraceStep[]; customerSwitched: boolean;
+      memory: { within_session: { turns: Turn[]; working: Working }; across_sessions: unknown };
+    }
+  | { ok: false; error: string; detail: string; trace: TraceStep[] };
+
 const ACCEPT = /\b(accept|yes please|yes|upgrade me|sign me up|take it|go ahead)\b/i;
 
-export class SessionDO {
-  constructor(private state: DurableObjectState, private env: GatewayBindings) {}
-
+export class SessionAgent extends AIChatAgent<GatewayBindings> {
   private async load(): Promise<State> {
-    return (await this.state.storage.get<State>('session'))
+    return (await this.ctx.storage.get<State>('session'))
       ?? { customerId: null, startedAt: new Date().toISOString(), turns: [], working: {} };
   }
 
-  async fetch(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-
-    if (url.pathname === '/state') return Response.json(await this.load());
-    if (url.pathname === '/reset') { await this.state.storage.deleteAll(); return Response.json({ reset: true }); }
-    if (url.pathname !== '/message') return new Response('not found', { status: 404 });
-
-    let body: any;
-    try { body = await req.json(); } catch { return Response.json({ error: 'invalid_json', detail: 'request body must be valid JSON' }, { status: 400 }); }
-    const { customerId, text, unsafeRanking, semanticSearch } = body;
+  async handleTurn(customerId: string, text: string, flags: TurnFlags): Promise<TurnResult> {
     let session = await this.load();
 
     // A different customer on the same session id starts clean. Context never leaks
     // between people, even if a session id is reused.
-    if (session.customerId && session.customerId !== customerId) {
+    const customerSwitched = !!session.customerId && session.customerId !== customerId;
+    if (customerSwitched) {
       session = { customerId, startedAt: new Date().toISOString(), turns: [], working: {} };
     }
     session.customerId = customerId;
@@ -69,7 +68,7 @@ export class SessionDO {
     const trace = new Trace();
     const orch = new Kernel('orchestrator', trace, this.env);
     trace.add({ stage: 'route', actor: 'channel', label: 'trigger captured',
-      detail: { session: this.state.id.toString().slice(0, 12), customerId, utterance: text }, m3_ref: 'S1.2' });
+      detail: { session: this.ctx.id.toString().slice(0, 12), customerId, utterance: text }, m3_ref: 'S1.2' });
 
     try {
     // Sequence 1 runs once per session; everything downstream depends on it.
@@ -133,7 +132,7 @@ export class SessionDO {
             ? ((f.profiles as any[]).find(p => !category || p.category === category)?.preferred_size ?? null)
             : null;
         } catch { /* discovery continues without fit */ }
-        const r = await discovery.rank(dk, customerId, text, segment, fitSize, category, !!unsafeRanking, !!semanticSearch);
+        const r = await discovery.rank(dk, customerId, text, segment, fitSize, category, !!flags.unsafeRanking, !!flags.semanticSearch);
         payload = r;
         session.working.lastProducts = r.products.map((p: any) => p.sku);
         session.working.lastSku = r.products[0]?.sku ?? session.working.lastSku ?? null;
@@ -220,22 +219,38 @@ export class SessionDO {
     }
 
     session.turns.push({ utterance: text, intent: cls.intent, at: new Date().toISOString() });
-    await this.state.storage.put('session', session);
+    await this.ctx.storage.put('session', session);
     trace.add({ stage: 'memory', actor: 'orchestrator', label: 'session context persisted to Durable Object storage',
       detail: { turns: session.turns.length, working: session.working }, m3_ref: 'S2.14' });
 
     const longTerm = await orch.invoke<any>('context.read', { customer_id: customerId }).catch(() => ({}));
 
-    return Response.json({
-      reply, intent: cls.intent, intent_confidence: cls.confidence, agent: agentName,
-      payload, trace: trace.steps,
+    return {
+      ok: true, reply, intent: cls.intent, intent_confidence: cls.confidence, agent: agentName,
+      payload, trace: trace.steps, customerSwitched,
       memory: {
         within_session: { turns: session.turns, working: session.working },
         across_sessions: longTerm,
       },
-    });
+    };
     } catch (e) {
-      return Response.json({ error: 'agent_error', detail: String(e), trace: trace.steps }, { status: 500 });
+      return { ok: false, error: 'agent_error', detail: String(e), trace: trace.steps };
     }
+  }
+
+  async onRequest(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+
+    if (url.pathname === '/state') return Response.json(await this.load());
+    if (url.pathname === '/reset') { await this.ctx.storage.deleteAll(); return Response.json({ reset: true }); }
+    if (url.pathname !== '/message') return new Response('not found', { status: 404 });
+
+    let body: any;
+    try { body = await req.json(); } catch { return Response.json({ error: 'invalid_json', detail: 'request body must be valid JSON' }, { status: 400 }); }
+    const { customerId, text, unsafeRanking, semanticSearch } = body;
+    const result = await this.handleTurn(customerId, text, { unsafeRanking, semanticSearch });
+    if (!result.ok) return Response.json(result, { status: 500 });
+    const { ok, customerSwitched, ...rest } = result;
+    return Response.json(rest);
   }
 }
