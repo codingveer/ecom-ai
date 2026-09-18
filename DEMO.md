@@ -109,6 +109,18 @@ without it.
 
 ---
 
+**Bonus · Retagging a SKU (optional, not timed)** — browser
+
+Open `admin.html`, search for a SKU whose tags don't match its actual style (the
+random-tag seed data makes these easy to find), open it, and retag it — e.g. add
+`party` to its tags. Save, then re-run the semantic search bonus above for a
+party-ish query and show the retagged SKU's rank move. Say this out loud: the
+ranking math (`discovery.ts`'s segment weighting, diversity floor, fairness
+guardrail) was never the problem — the underlying tag data was random. This is the
+fix, live.
+
+---
+
 ### Questions to have an answer ready for
 - *Can an agent reach the database?* Open the four `wrangler.jsonc` files — three have no
   D1 binding at all. The platform will not hand the agents Worker a database handle.

@@ -25,6 +25,11 @@ mockup of the same live backend (search, product detail with size-check, account
 subscription and loyalty points), for anyone who wants to feel the personalisation as a
 shopper would rather than read the trace panel.
 
+A tagging admin lives at http://localhost:8100/admin.html — search the catalogue,
+retag a SKU's category/tags/attributes or set a manual relevance boost, and the change
+re-embeds into the semantic search index immediately (falls back to a "stale until
+reindexed" notice if the embed/upsert step fails).
+
 ## Deploying
 
 ```bash
