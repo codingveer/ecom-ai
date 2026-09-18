@@ -477,7 +477,27 @@ these right most of the time; if scores are surprisingly low, read the actual mo
 output before assuming the harness is broken - the prompt/model might genuinely be
 underperforming, which is exactly what this eval exists to catch).
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: Confirm the experiment actually landed on Braintrust's hosted platform, not just locally**
+
+The eval suite's whole purpose is a shared, online record of prompt quality over time
+- an experiment that only printed local scores and never uploaded is not this feature.
+`Eval()` uploads by default (nothing in this plan sets `noSendLogs`), and on
+completion prints a results URL to stdout (something like `https://www.braintrust.dev/
+app/<org>/p/<project>/experiments/<name>`). Capture that URL from Step 8's actual
+output and report it.
+
+Then independently confirm via the Braintrust REST API (authenticated with
+`BRAINTRUST_API_KEY` from `.env.braintrust`, the same key already configured) rather
+than trusting the printed URL alone - e.g. `GET https://api.braintrust.dev/v1/project`
+to find the project id matching `BRAINTRUST_PROJECT`/`.braintrust.json`'s project, then
+`GET https://api.braintrust.dev/v1/experiment?project_id=<id>` and confirm an
+experiment named `neutail-intent-classify` exists with a recent `created` timestamp
+and a nonzero row/case count. If the exact endpoint/response shape differs from this
+description, check `https://www.braintrust.dev/docs` or the SDK's own REST client
+rather than guessing - the point is proving the data really arrived, not matching this
+description exactly.
+
+- [ ] **Step 10: Commit**
 
 ```bash
 git add evals tsconfig.evals.json package.json package-lock.json
@@ -689,6 +709,12 @@ per-case scores - confirm each prompt's specific constraint scorer (not just the
 coherence judge) passes on the large majority of cases; a genuinely low score on a
 specific-constraint scorer (not the judge) means the prompt itself needs attention, not
 the harness.
+
+As in Task 2's Step 9, confirm via the Braintrust REST API (not just the printed
+output) that all five experiments (`neutail-discovery-rationale`,
+`neutail-fit-explanation`, `neutail-upsell-copy`, `neutail-loyalty-nudge`, plus
+`neutail-intent-classify` from Task 2) exist on the hosted platform with recent
+timestamps and nonzero case counts.
 
 - [ ] **Step 7: Commit**
 
