@@ -270,6 +270,59 @@ app.get('/admin/products/:sku', async c => {
   return row ? c.json(row) : c.json({ error: 'sku_not_found' }, 404);
 });
 
+/** Same template scripts/gen-seed.ts's describeProduct uses at seed time - duplicated here,
+ * not imported, because scripts/ runs under Node for codegen and this Worker runs on the
+ * Workers runtime. Keeps a retagged SKU's embedded text consistent with a freshly-seeded one. */
+function describeProduct(p: { title: string; category: string; brand: string; colour: string; material: string; cut: string; styles: string[] }): string {
+  const cutPhrase = p.cut === 'runs_small' ? 'a snug, true-to-body cut'
+    : p.cut === 'runs_large' ? 'a relaxed, roomy cut'
+    : 'a true-to-size cut';
+  const tagPhrase = p.styles.join(', ');
+  const article = /^[aeiou]/i.test(p.colour) ? 'An' : 'A';
+  return `${article} ${p.colour} ${p.material} ${p.title.toLowerCase()} by ${p.brand}, ${cutPhrase}, `
+    + `from the ${p.category} range, tagged ${tagPhrase}.`;
+}
+
+const ADMIN_EDITABLE_FIELDS = [
+  'category', 'department', 'brand', 'colour', 'material', 'cut', 'style_tags', 'price_tier', 'relevance_boost',
+] as const;
+
+app.post('/admin/products/:sku', async c => {
+  const sku = c.req.param('sku');
+  const existing = await c.env.DB.prepare(`SELECT * FROM products WHERE sku = ?`).bind(sku).first<any>();
+  if (!existing) return c.json({ error: 'sku_not_found' }, 404);
+
+  const body = await c.req.json<any>();
+  const next = { ...existing };
+  for (const field of ADMIN_EDITABLE_FIELDS) {
+    if (body[field] !== undefined) next[field] = field === 'relevance_boost' ? Number(body[field]) : String(body[field]);
+  }
+
+  const description = describeProduct({
+    title: next.title, category: next.category, brand: next.brand, colour: next.colour,
+    material: next.material, cut: next.cut,
+    styles: String(next.style_tags).split(',').map((s: string) => s.trim()).filter(Boolean),
+  });
+
+  await c.env.DB.prepare(`
+    UPDATE products SET category=?, department=?, brand=?, colour=?, material=?, cut=?,
+      style_tags=?, price_tier=?, relevance_boost=?, description=? WHERE sku=?`)
+    .bind(next.category, next.department, next.brand, next.colour, next.material, next.cut,
+      next.style_tags, next.price_tier, next.relevance_boost, description, sku).run();
+
+  let reindexed = false;
+  let degraded_reason: string | undefined;
+  try {
+    const embedded = await c.env.AI.run(EMBED_MODEL as any, { text: [description] }) as any;
+    await c.env.VECTORS.upsert([{ id: sku, values: embedded.data[0], metadata: { category: next.category } }]);
+    reindexed = true;
+  } catch (e) {
+    degraded_reason = e instanceof Error ? e.message : 'reindex failed';
+  }
+
+  return c.json({ sku, updated: true, reindexed, ...(degraded_reason ? { degraded_reason } : {}) });
+});
+
 app.get('/inventory/:sku', async c => {
   const { results } = await c.env.DB.prepare(`SELECT size, qty FROM inventory WHERE sku = ?`).bind(c.req.param('sku')).all();
   return c.json({ sku: c.req.param('sku'), sizes: results });
