@@ -165,7 +165,7 @@ async function semanticSearch(env: Env, q: string, category: string | null, depa
 
   const scoreBySku = new Map(matches.matches.map(m => [m.id, m.score]));
   return (results as any[])
-    .map(r => ({ ...r, relevance: r2((scoreBySku.get(r.sku) ?? 0) * 10) }))
+    .map(r => ({ ...r, relevance: r2((scoreBySku.get(r.sku) ?? 0) * 10 + Number(r.relevance_boost ?? 0)) }))
     .filter(r => r.stock > 0)
     .sort((a, b) => b.relevance - a.relevance)
     .slice(0, limit);
