@@ -30,14 +30,20 @@ function noInventedProducts({ output, input }: { output: string; input: Case }) 
   const known = new Set(input.top.flatMap(p => [p.title, p.sku]));
   const mentionsUnknownSku = /SKU-\d{5}/g.test(output) && (output.match(/SKU-\d{5}/g) ?? []).some(sku => !known.has(sku));
 
-  // Real output references products by name in prose, not by SKU - the SKU check above
-  // almost never fires. This catches the more realistic failure mode: a Title-Case
-  // multi-word phrase (a plausible invented product name) that shares no word with any
-  // known title, e.g. "the Emerald Cocktail Dress" when `top` only has "Cotton Blend Chinos".
+  // Real output references products by name in prose, not by SKU. This catches the
+  // more realistic failure mode: a Title-Case multi-word phrase (a plausible product
+  // name) with no MAJORITY word overlap against any single known title - majority
+  // against one specific title, not "shares any word with the pooled set of all known
+  // titles", so an invented title sharing only a generic category word (e.g. "Dress")
+  // with a real title doesn't slip through as a false negative.
   const titlePhrases = output.match(/\b(?:[A-Z][a-z]+\s+){1,4}[A-Z][a-z]+\b/g) ?? [];
-  const knownWords = new Set(input.top.flatMap(p => p.title.split(/\s+/)));
-  const mentionsUnknownTitle = titlePhrases.some(phrase =>
-    !phrase.split(/\s+/).some(word => knownWords.has(word)));
+  const knownTitleWordSets = input.top.map(p => new Set(p.title.split(/\s+/)));
+  const mentionsUnknownTitle = titlePhrases.some(phrase => {
+    const words = phrase.split(/\s+/);
+    const matchesSomeKnownTitle = knownTitleWordSets.some(titleWords =>
+      words.filter(w => titleWords.has(w)).length >= Math.ceil(words.length / 2));
+    return !matchesSomeKnownTitle;
+  });
 
   return { name: 'no_invented_products', score: (mentionsUnknownSku || mentionsUnknownTitle) ? 0 : 1 };
 }
