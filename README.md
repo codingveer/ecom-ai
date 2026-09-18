@@ -10,7 +10,7 @@ Durable Objects + KV + AI Gateway.
 npm install
 npm run gen        # regenerates seed.sql, the tool bundle and the prompt bundle
 npm run db:local   # applies schema.sql then seed.sql to local D1
-npm run dev        # four Workers with service bindings wired between them
+npm run dev        # four Workers with service bindings wired between them, plus the console's Vite dev server (five processes total)
 ```
 
 Then open http://localhost:8100 and **send one throwaway message before you demo**.

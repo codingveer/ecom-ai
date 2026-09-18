@@ -99,3 +99,31 @@ These are deliberate and, in each case, stronger than what they replace.
 - Model registry and drift monitoring — named in the M3 platform, no prototype surface.
 - Identity resolution across two source records — the seed has one customer master, so
   the merge step in S11 is represented but not exercised.
+
+## 10. `AIChatAgent` adopted for transport and persistence only, its own AI-loop deliberately unused
+**Design:** not an M3 design point — a library-adoption choice made rebasing the demo
+console onto Cloudflare's `agents` package (`packages/app/src/session-do.ts`,
+`SessionAgent extends AIChatAgent<GatewayBindings>`). Documented here anyway because it
+is the single most surprising thing in the codebase to a reader who knows what
+`AIChatAgent` normally does, and the surprise reads as a bug if it isn't explained.
+**Build:** `AIChatAgent` ships its own agentic loop — `onChatMessage` driving
+`streamText` with tool-calling against a single model. `SessionAgent` overrides
+`onChatMessage` and never calls into any of that; it uses `AIChatAgent` purely for
+WebSocket chat-protocol transport (`useAgentChat` on the console side,
+`agentsMiddleware()` routing on the app side) and for message persistence (`this.sessions`
+/ `this.messages`, backed by `AIChatAgent`'s own SQL tables, used for reconnect/replay
+only). All orchestration — intent classification, dispatch to one of the five agent
+modules, tool-gateway and LLM-gateway calls, policy checks, memory writes — still runs
+through `handleTurn`, unchanged from before the rebase, and is reached from two entry
+points on `SessionAgent`: the pre-existing plain-HTTP `onRequest` (`/session/:id/message`,
+used by `scripts/smoke.ts` and any curl) and the new chat-protocol `onChatMessage`
+(used by `packages/console`'s `useAgentChat`). Neither entry point, nor `AIChatAgent`
+itself, contains orchestration logic of its own.
+**Why:** this app's "chat" is five separate hand-written agent modules behind one
+orchestrator with bespoke control flow and its own tool/LLM gateways — not a single
+model call a generic AI-loop can drive. Adopting `AIChatAgent` bought a maintained
+WebSocket transport, reconnect/replay, and a transcript store for free, without asking
+`handleTurn` to be rewritten as a tool the framework's own loop calls. The trade-off is
+that the class carries loop machinery (`streamText`, tool-calling scaffolding) that this
+build never exercises; that is accepted as dead weight in exchange for not hand-rolling
+a WebSocket chat protocol.

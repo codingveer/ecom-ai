@@ -12,7 +12,8 @@
     "bindings": [{ "name": "SessionAgent", "class_name": "SessionAgent" }]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["SessionAgent"] }
+    { "tag": "v1", "new_sqlite_classes": ["SessionDO"] },
+    { "tag": "v2", "renamed_classes": [{ "from": "SessionDO", "to": "SessionAgent" }] }
   ],
   "services": [
     { "binding": "TOOLS", "service": "neutail-tools" },

@@ -59,10 +59,30 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
     let session = await this.load();
 
     // A different customer on the same session id starts clean. Context never leaks
-    // between people, even if a session id is reused.
+    // between people, even if a session id is reused. This also wipes the visible chat
+    // transcript AIChatAgent persists, so both entry points (`onRequest`'s plain HTTP
+    // and `onChatMessage`'s chat protocol) get the wipe for free from one place, rather
+    // than each caller having to remember to do it.
+    //
+    // `this.sessions.session().clearMessages()`, NOT `await this.saveMessages([])`:
+    // saveMessages() acquires AIChatAgent's exclusive per-session turn queue
+    // (_runExclusiveChatTurn -> TurnQueue.enqueue in node_modules/agents/dist/chat/
+    // index.js), and awaiting it from inside onChatMessage - which is itself already
+    // running inside that same queue slot - is a circular wait that wedges the DO
+    // forever. It also would not even work: persistMessages([]) merges an empty
+    // incoming list onto the existing transcript instead of replacing it (no
+    // `_deleteStaleRows`), so no rows are actually deleted or changed.
+    // `sessions.session()` returns the exact same handle AIChatAgent keeps as its
+    // private `#session` (see its constructor: `this.#session = this.sessions.session()`),
+    // and `clearMessages()` does a real `DELETE FROM cf_agents_session_messages ...`
+    // then notifies the change feed with `{ type: 'clear' }` - which is exactly what
+    // `this.messages = []` reacts to (see #subscribeToSessionChanges). It never
+    // touches `_turnQueue`, so it is safe to await synchronously here regardless of
+    // which caller (`onRequest` or `onChatMessage`) invoked `handleTurn`.
     const customerSwitched = !!session.customerId && session.customerId !== customerId;
     if (customerSwitched) {
       session = { customerId, startedAt: new Date().toISOString(), turns: [], working: {} };
+      await this.sessions.session().clearMessages();
     }
     session.customerId = customerId;
 
@@ -258,27 +278,25 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
     const customerId = String(body.customerId ?? '');
     const flags = { unsafeRanking: !!body.unsafeRanking, semanticSearch: !!body.semanticSearch };
 
-    const result = await this.handleTurn(customerId, text, flags);
-
-    if (result.ok && result.customerSwitched) {
-      // A different customer arrived on this session id - the visible transcript must
-      // wipe too, not just the working memory handleTurn already reset. This is
-      // `this.sessions.session().clearMessages()`, NOT `await this.saveMessages([])`:
-      // saveMessages() acquires AIChatAgent's exclusive per-session turn queue
-      // (_runExclusiveChatTurn -> TurnQueue.enqueue in node_modules/agents/dist/chat/
-      // index.js), and awaiting it from inside onChatMessage - which is itself already
-      // running inside that same queue slot - is a circular wait that wedges the DO
-      // forever. It also would not even work: persistMessages([]) merges an empty
-      // incoming list onto the existing transcript instead of replacing it (no
-      // `_deleteStaleRows`), so no rows are actually deleted or changed.
-      // `sessions.session()` returns the exact same handle AIChatAgent keeps as its
-      // private `#session` (see its constructor: `this.#session = this.sessions.session()`),
-      // and `clearMessages()` does a real `DELETE FROM cf_agents_session_messages ...`
-      // then notifies the change feed with `{ type: 'clear' }` - which is exactly what
-      // `this.messages = []` reacts to (see #subscribeToSessionChanges). It never
-      // touches `_turnQueue`, so it is safe to await synchronously, right here.
-      await this.sessions.session().clearMessages();
+    // Mirror the HTTP route's (`/session/:id/message` in index.ts) validation: without
+    // this, an empty customerId makes handleTurn treat it as always different from any
+    // established session's customerId (spurious customer-switch wipe), then throws
+    // inside profiling.classify(k, ''), streaming a raw error string back as the reply.
+    if (!customerId || !text) {
+      const stream = createUIMessageStream({
+        execute: async ({ writer }) => {
+          writer.write({ type: 'text-start', id: 'reply' });
+          writer.write({ type: 'text-delta', id: 'reply', delta: 'customerId and text are required.' });
+          writer.write({ type: 'text-end', id: 'reply' });
+        },
+      });
+      return createUIMessageStreamResponse({ stream });
     }
+
+    const result = await this.handleTurn(customerId, text, flags);
+    // Customer-switch transcript wipe (this.sessions.session().clearMessages()) now
+    // happens inside handleTurn itself, right where customerSwitched is computed - see
+    // the comment there. Both onRequest and onChatMessage get it for free from one place.
 
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
@@ -317,7 +335,25 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
     const url = new URL(req.url);
 
     if (url.pathname === '/state') return Response.json(await this.load());
-    if (url.pathname === '/reset') { await this.ctx.storage.deleteAll(); return Response.json({ reset: true }); }
+    if (url.pathname === '/reset') {
+      // NOT `this.ctx.storage.deleteAll()`: verified live (it threw `SqlError: no such
+      // table: cf_agents_session_messages` on the very next line) that on a SQLite-backed
+      // Durable Object, `deleteAll()` resets the WHOLE underlying SQLite database - every
+      // table, not just the KV-style keys this class itself writes through
+      // `ctx.storage.get/put`. That drops AIChatAgent's own `cf_agents_session_messages`
+      // (etc.) tables too, out from under it. Worse than the immediate crash: `Sessions`
+      // (`agents/sessions`) memoises "tables already ensured" in an in-memory flag once
+      // per live DO instance (`SessionsCore#ensureTables`'s `_tablesEnsured`), not by
+      // checking the database, so even a reordered call would leave every later message
+      // in that DO's lifetime failing the same way until the instance is evicted.
+      // `this.ctx.storage` is used for exactly one key anywhere in this class -
+      // `'session'` (see `load()` / the `ctx.storage.put('session', ...)` below) - so
+      // deleting that one key is the precise equivalent of "reset the orchestrator's own
+      // Working state" without touching any table AIChatAgent owns.
+      await this.ctx.storage.delete('session');
+      await this.sessions.session().clearMessages();
+      return Response.json({ reset: true });
+    }
     if (url.pathname !== '/message') return new Response('not found', { status: 404 });
 
     let body: any;

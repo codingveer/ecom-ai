@@ -5,8 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Neu.Tail — a personalisation assistant prototype built as four Cloudflare Workers
-(`packages/app`, `packages/tools`, `packages/llm`, `packages/services`) plus a shared
-`scripts/` codegen step. It implements a Mission #3 blueprint: five specialist agents
+(`packages/app`, `packages/tools`, `packages/llm`, `packages/services`), a shared
+`scripts/` codegen step, and a fifth package, `packages/console` — a Vite + React chat
+console (`useAgentChat`) that talks to `packages/app`'s `SessionAgent` over the chat
+protocol, replacing the old hand-written static demo page. It implements a Mission #3
+blueprint: five specialist agents
 (profiling, discovery, fit, upsell, loyalty) behind one orchestrator, talking to a tool
 gateway and an LLM gateway only through service bindings — never to each other's
 storage directly. `README.md` explains the product framing and objectives in depth;
@@ -19,9 +22,10 @@ Read both before making architectural changes.
 npm install
 npm run gen            # regenerate seed.sql, tool bundle, prompt bundle from scripts/
 npm run db:local        # apply schema.sql then seed.sql to local D1 (rerun before every demo/test run — it resets state)
-npm run dev              # all four Workers concurrently (services:8101, tools:8102, llm:8103, app:8100), service bindings wired
-npm run typecheck       # tsc --noEmit for packages/, plus tsconfig.scripts.json for scripts/
+npm run dev              # four Workers plus the console's Vite dev server, concurrently (services:8101, tools:8102, llm:8103, app:8100, console dev server), service bindings wired
+npm run typecheck       # tsc --noEmit for packages/, tsconfig.scripts.json for scripts/, plus the console's own typecheck
 npm run smoke            # scripts/smoke.ts — replays the whole demo end-to-end via HTTP, no browser needed
+npm run build:console    # builds packages/console into packages/app/public/ (index.html + assets/) — the committed build is what `npm run dev`/a fresh clone serves; re-run and re-commit after any packages/console/src change
 ```
 
 Individual workers can be run alone with `npm run dev:services` / `dev:tools` / `dev:llm` / `dev:app` (same ports as above), useful when iterating on one Worker.
@@ -47,16 +51,24 @@ npm run deploy                              # services, tools, llm, app, in that
 - `neutail-llm` (`packages/llm`) — a Durable Object (`USAGE`) for token accounting, an
   optional `AI` binding (commented out — Workers AI has no local simulator). No D1, no
   binding to `services`.
-- `neutail-app` (`packages/app`) — a Durable Object (`SESSION`), service bindings to
-  `tools` and `llm`, and the static asset binding for the demo console. No D1.
+- `neutail-app` (`packages/app`) — a Durable Object (`SessionAgent`, rebased onto
+  Cloudflare's `AIChatAgent`), service bindings to `tools` and `llm`, and the static
+  asset binding for the demo console (built from `packages/console` into
+  `packages/app/public/`). No D1.
 
 The absence of `d1_databases` in three of the four configs is the actual enforcement
 mechanism for "agents must never touch the database directly" — it's a platform
 capability boundary, not a code convention. Don't add a D1 binding to `app`, `tools`, or
 `llm` to take a shortcut; route new data access through a tool contract instead.
 
-**Request flow:** `packages/app/src/index.ts` (Hono) → `SessionDO` (one Durable Object
-instance per session id, `packages/app/src/session-do.ts`) → intent classification via
+**Request flow:** `packages/app/src/index.ts` (Hono) → `SessionAgent` (one Durable
+Object instance per session id, `packages/app/src/session-do.ts`, extending
+Cloudflare's `AIChatAgent`) → `handleTurn`, the single orchestrator, reached from two
+entry points on `SessionAgent`: `onRequest` (plain HTTP, `/session/:id/message`, what
+`scripts/smoke.ts` and any direct curl use) and `onChatMessage` (the chat protocol used
+by `packages/console`'s `useAgentChat` over the `agentsMiddleware()`-mounted
+`/agents/session-agent/:name` routes). Both call `handleTurn` and nothing else — it is
+the only place orchestration logic lives. From there: intent classification via
 `Kernel.llm()` → one of five agent modules under `packages/app/src/agents/` → each agent
 calls out via `Kernel.invoke()` (tool gateway) and `Kernel.llm()` (LLM gateway) only.
 Agents never see a URL, DB handle, model name, or provider — `Kernel`
@@ -64,7 +76,7 @@ Agents never see a URL, DB handle, model name, or provider — `Kernel`
 through it is appended to a `Trace` that's returned to the client alongside the reply.
 
 **Memory has two tiers, deliberately not one:**
-- *Within a session* — `SessionDO`'s own Durable Object storage: turn history, resolved
+- *Within a session* — `SessionAgent`'s own Durable Object storage: turn history, resolved
   segment, last category/SKU, pending offer. A different `customerId` arriving on the
   same session id wipes and restarts the DO's state (context must never leak between
   customers even if a session id is reused).

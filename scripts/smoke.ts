@@ -76,6 +76,21 @@ const used = await (await fetch('http://localhost:8102/invoke', {
 console.log('new tool callable immediately:', used.ok, '-', used.data?.trending?.length, 'rows');
 await fetch('http://localhost:8102/registry/reset', { method:'POST' });
 
+line('BEAT 7c - customer-switch and reset both wipe the AIChatAgent transcript (final-review C1/I4)');
+const getMessages = (session: string) => get(`/agents/session-agent/${session}/get-messages`);
+await post('/session/demo-switch/message', { customerId: 'C001', text: 'show me an occasion dress' });
+const afterHttpTurn = await getMessages('demo-switch');
+console.log('transcript after plain-HTTP turn (expect []):', JSON.stringify(afterHttpTurn));
+const switched = await post('/session/demo-switch/message', { customerId: 'C002', text: 'show me an occasion dress' });
+console.log('customer switch via HTTP: ok=', switched.ok !== false, ' reply mentions no C001 leakage:', !String(switched.reply).includes('C001'));
+await post('/session/demo-switch/reset', {});
+const afterReset = await getMessages('demo-switch');
+console.log('transcript after /reset (expect []):', JSON.stringify(afterReset));
+if (afterHttpTurn.length !== 0 || afterReset.length !== 0) {
+  console.error('\nC1/I4 regression: expected an empty AIChatAgent transcript, got messages above.');
+  process.exit(1);
+}
+
 line('BEAT 8 - modelled business outcome from the live corpus');
 console.log(JSON.stringify(await get('/outcome'), null, 2));
 

@@ -102,6 +102,11 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
     body: () => ({ customerId }),
   });
 
+  // Mount-time-only indicator that long-term context exists on file, before the first
+  // message. A fresh session's own turns/working are always empty at mount (sessions are
+  // minted fresh on load/switch - see loadInitialSession/switchCustomer above), so this
+  // can never reflect the current turn; the per-turn meter below is computed from
+  // `lastTrace` instead, not from this stale fetch.
   useEffect(() => {
     fetch(`/session/${sessionId}`)
       .then(r => r.json())
@@ -144,6 +149,16 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
     }
     return undefined;
   }, [messages]);
+
+  // `lastTrace.memory.within_session` is THIS session's turn history; `across_sessions`
+  // is the D1-backed long-term context (segment, propensity, confirmed fit recs, ...) -
+  // see packages/app/src/session-do.ts's handleTurn. Computed per turn from the trace
+  // that already rode along on the last assistant message, rather than from the
+  // mount-time `memorySummary` fetch above, which is always stale (see that effect's
+  // comment) and which mislabelled `working` (within-session) as "long-term keys".
+  const meter = lastTrace
+    ? `session turns ${lastTrace.memory.within_session.turns.length} · long-term keys ${Object.keys(lastTrace.memory.across_sessions ?? {}).length}`
+    : memorySummary;
 
   return (
     <main>
@@ -219,7 +234,7 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
           <span>model calls <b>{totals.llm}</b></span>
           <span>tokens <b>{totals.tokens}</b></span>
           <span>policy checks <b>{totals.policy}</b></span>
-          <span>{memorySummary}</span>
+          <span>{meter}</span>
         </div>
       </section>
     </main>
