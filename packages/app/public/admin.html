@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neu.Tail — Admin</title>
+<style>
+  :root{
+    --ink:#101014; --paper:#fff; --rule:#E4E4E7; --mute:#71717A;
+    --front:#FAFAFA; --accent:#5B4B9E; --warn-bg:#FBEFE9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--paper)}
+  header{border-bottom:1px solid var(--rule);padding:18px 24px;display:flex;align-items:center;gap:16px}
+  header h1{font-size:16px;margin:0;font-weight:700}
+  header a{font-size:12px;color:var(--mute);text-decoration:none}
+  main{max-width:1100px;margin:0 auto;padding:24px}
+
+  .filters{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .filters input,.filters select{font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--rule);border-radius:6px}
+  .filters input{flex:1;min-width:180px}
+  .filters button{font:inherit;font-size:13px;font-weight:600;padding:7px 14px;border:0;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);padding:8px;border-bottom:1px solid var(--rule)}
+  td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:middle}
+  tr.row{cursor:pointer}
+  tr.row:hover{background:var(--front)}
+  td img{width:36px;height:36px;object-fit:cover;border-radius:4px;background:var(--front)}
+  .muted{color:var(--mute)}
+  .boost-pos{color:#1a7f37;font-weight:600}
+  .boost-neg{color:#b3261e;font-weight:600}
+
+  .pager{display:flex;gap:12px;align-items:center;justify-content:flex-end;margin-top:12px;font-size:12.5px;color:var(--mute)}
+  .pager button{font:inherit;font-size:12.5px;border:1px solid var(--rule);background:#fff;padding:5px 10px;border-radius:6px;cursor:pointer}
+  .pager button:disabled{opacity:.4;cursor:default}
+
+  .panel{position:fixed;top:0;right:0;bottom:0;width:360px;max-width:92vw;background:#fff;border-left:1px solid var(--rule);
+    box-shadow:-8px 0 24px rgba(0,0,0,.08);padding:22px;overflow-y:auto;transform:translateX(100%);transition:transform .15s ease;z-index:20}
+  .panel.open{transform:translateX(0)}
+  .panel h2{font-size:15px;margin:0 0 2px}
+  .panel .sub{font-size:12px;color:var(--mute);margin-bottom:18px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin-bottom:4px}
+  .field input,.field select{width:100%;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--rule);border-radius:6px}
+  .panel-actions{display:flex;gap:10px;margin-top:18px}
+  .panel-actions button{font:inherit;font-size:13px;font-weight:600;padding:8px 14px;border:0;border-radius:6px;cursor:pointer}
+  #save{background:var(--ink);color:#fff}
+  #cancel{background:var(--front);color:var(--ink)}
+  .status{margin-top:12px;font-size:12.5px;padding:8px 10px;border-radius:6px}
+  .status.ok{background:#EAF6EC;color:#1a7f37}
+  .status.warn{background:var(--warn-bg);color:#8A4B2A}
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.15);z-index:10;display:none}
+  .overlay.open{display:block}
+</style>
+</head>
+<body>
+<header>
+  <h1>Neu.Tail — Admin</h1>
+  <a href="/shop.html">&larr; back to shop</a>
+</header>
+<main>
+  <div class="filters">
+    <input id="q" placeholder="Search sku, title, or brand&hellip;">
+    <select id="category"><option value="">All categories</option></select>
+    <select id="department"><option value="">All departments</option>
+      <option value="women">women</option><option value="men">men</option><option value="unisex">unisex</option>
+    </select>
+    <button id="search">Search</button>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th></th><th>SKU</th><th>Title</th><th>Brand</th><th>Category</th><th>Dept</th>
+      <th>Tier</th><th>Tags</th><th>Boost</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <div class="pager">
+    <span id="pageInfo"></span>
+    <button id="prev">&larr; Prev</button>
+    <button id="next">Next &rarr;</button>
+  </div>
+</main>
+
+<div class="overlay" id="overlay"></div>
+<div class="panel" id="panel">
+  <h2 id="panelSku"></h2>
+  <div class="sub" id="panelTitle"></div>
+
+  <div class="field"><label>Category</label>
+    <select id="f_category"></select>
+  </div>
+  <div class="field"><label>Department</label>
+    <select id="f_department">
+      <option value="women">women</option><option value="men">men</option><option value="unisex">unisex</option>
+    </select>
+  </div>
+  <div class="field"><label>Price tier</label>
+    <select id="f_price_tier">
+      <option value="premium">premium</option><option value="core">core</option>
+      <option value="private_label">private_label</option><option value="value">value</option>
+    </select>
+  </div>
+  <div class="field"><label>Cut</label>
+    <select id="f_cut">
+      <option value="runs_small">runs_small</option><option value="true_to_size">true_to_size</option>
+      <option value="runs_large">runs_large</option>
+    </select>
+  </div>
+  <div class="field"><label>Brand</label><input id="f_brand"></div>
+  <div class="field"><label>Colour</label><input id="f_colour"></div>
+  <div class="field"><label>Material</label><input id="f_material"></div>
+  <div class="field"><label>Tags (comma-separated, free text)</label><input id="f_style_tags"></div>
+  <div class="field">
+    <label>Relevance boost (-2 to 2, manual nudge independent of tags)</label>
+    <input id="f_relevance_boost" type="number" step="0.5" min="-2" max="2">
+  </div>
+
+  <div class="panel-actions">
+    <button id="save">Save</button>
+    <button id="cancel">Cancel</button>
+  </div>
+  <div id="status"></div>
+</div>
+
+<script>
+const CATEGORIES = ['dresses','tops','knitwear','outerwear','trousers','skirts','footwear','accessories'];
+for (const sel of [document.getElementById('category'), document.getElementById('f_category')]) {
+  for (const cat of CATEGORIES) {
+    const o = document.createElement('option'); o.value = cat; o.textContent = cat; sel.appendChild(o);
+  }
+}
+
+let page = 1;
+const pageSize = 50;
+let total = 0;
+
+async function loadRows() {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  const q = document.getElementById('q').value.trim();
+  const category = document.getElementById('category').value;
+  const department = document.getElementById('department').value;
+  if (q) params.set('q', q);
+  if (category) params.set('category', category);
+  if (department) params.set('department', department);
+
+  const res = await fetch(`/admin/products?${params}`);
+  const data = await res.json();
+  total = data.total ?? 0;
+  const tbody = document.getElementById('rows');
+  tbody.innerHTML = '';
+  for (const p of (data.results ?? [])) {
+    const tr = document.createElement('tr');
+    tr.className = 'row';
+    const boost = Number(p.relevance_boost ?? 0);
+    const boostClass = boost > 0 ? 'boost-pos' : boost < 0 ? 'boost-neg' : 'muted';
+    tr.innerHTML = `
+      <td><img src="${p.image_url ?? ''}" loading="lazy"></td>
+      <td>${p.sku}</td>
+      <td>${p.title}</td>
+      <td class="muted">${p.brand}</td>
+      <td>${p.category}</td>
+      <td class="muted">${p.department}</td>
+      <td class="muted">${p.price_tier}</td>
+      <td class="muted">${p.style_tags}</td>
+      <td class="${boostClass}">${boost}</td>`;
+    tr.addEventListener('click', () => openEditor(p.sku));
+    tbody.appendChild(tr);
+  }
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  document.getElementById('pageInfo').textContent = `Page ${page} of ${pages} (${total} products)`;
+  document.getElementById('prev').disabled = page <= 1;
+  document.getElementById('next').disabled = page >= pages;
+}
+
+document.getElementById('search').addEventListener('click', () => { page = 1; loadRows(); });
+document.getElementById('prev').addEventListener('click', () => { if (page > 1) { page--; loadRows(); } });
+document.getElementById('next').addEventListener('click', () => { page++; loadRows(); });
+
+let editingSku = null;
+
+async function openEditor(sku) {
+  const res = await fetch(`/admin/products/${encodeURIComponent(sku)}`);
+  if (!res.ok) return;
+  const p = await res.json();
+  editingSku = sku;
+  document.getElementById('panelSku').textContent = p.sku;
+  document.getElementById('panelTitle').textContent = p.title;
+  document.getElementById('f_category').value = p.category;
+  document.getElementById('f_department').value = p.department;
+  document.getElementById('f_price_tier').value = p.price_tier;
+  document.getElementById('f_cut').value = p.cut;
+  document.getElementById('f_brand').value = p.brand;
+  document.getElementById('f_colour').value = p.colour;
+  document.getElementById('f_material').value = p.material;
+  document.getElementById('f_style_tags').value = p.style_tags;
+  document.getElementById('f_relevance_boost').value = p.relevance_boost ?? 0;
+  document.getElementById('status').textContent = '';
+  document.getElementById('status').className = 'status';
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeEditor() {
+  document.getElementById('panel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+  editingSku = null;
+}
+
+document.getElementById('cancel').addEventListener('click', closeEditor);
+document.getElementById('overlay').addEventListener('click', closeEditor);
+
+document.getElementById('save').addEventListener('click', async () => {
+  if (!editingSku) return;
+  const body = {
+    category: document.getElementById('f_category').value,
+    department: document.getElementById('f_department').value,
+    price_tier: document.getElementById('f_price_tier').value,
+    cut: document.getElementById('f_cut').value,
+    brand: document.getElementById('f_brand').value,
+    colour: document.getElementById('f_colour').value,
+    material: document.getElementById('f_material').value,
+    style_tags: document.getElementById('f_style_tags').value,
+    relevance_boost: Number(document.getElementById('f_relevance_boost').value || 0),
+  };
+  const res = await fetch(`/admin/products/${encodeURIComponent(editingSku)}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  const status = document.getElementById('status');
+  if (!res.ok || data.error) {
+    status.textContent = `Save failed: ${data.error ?? res.status}`;
+    status.className = 'status warn';
+    return;
+  }
+  status.textContent = data.reindexed
+    ? 'Saved — semantic index updated.'
+    : `Saved — semantic index NOT updated (${data.degraded_reason ?? 'reindex failed'}). Stale until reindexed.`;
+  status.className = data.reindexed ? 'status ok' : 'status warn';
+  await loadRows();
+});
+
+loadRows();
+</script>
+</body>
+</html>
