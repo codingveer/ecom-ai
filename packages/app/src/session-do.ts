@@ -18,7 +18,8 @@
  *     just the visible chat transcript, used for reconnect/replay. It is never read by
  *     handleTurn and never substitutes for the two stores above.
  */
-import { AIChatAgent } from '@cloudflare/ai-chat';
+import { AIChatAgent, type OnChatMessageOptions } from '@cloudflare/ai-chat';
+import { createUIMessageStream, createUIMessageStreamResponse, type GenerateTextOnFinishCallback, type ToolSet } from 'ai';
 import { Kernel, Trace, type GatewayBindings, type TraceStep } from './kernel.js';
 import * as profiling from './agents/profiling.js';
 import * as discovery from './agents/discovery.js';
@@ -236,6 +237,66 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
     } catch (e) {
       return { ok: false, error: 'agent_error', detail: String(e), trace: trace.steps };
     }
+  }
+
+  /**
+   * WebSocket chat-protocol entry point for `agentsMiddleware()` / `useAgentChat`
+   * clients. This is a transport wrapper around `handleTurn` - the same orchestrator
+   * `onRequest`'s plain-HTTP `/message` path calls - not a second implementation.
+   * The reply is already fully computed before any chunk is written; the delta loop
+   * below paces the reveal for the client, it does not reduce time-to-first-token.
+   * The full trace and memory snapshot ride along as a single `data-trace` part so
+   * the console can render them without a second round trip.
+   */
+  async onChatMessage(
+    _onFinish: GenerateTextOnFinishCallback<ToolSet>,
+    options?: OnChatMessageOptions,
+  ): Promise<Response> {
+    const last = this.messages[this.messages.length - 1];
+    const text = last?.parts?.filter(p => p.type === 'text').map(p => (p as any).text).join('') ?? '';
+    const body = options?.body ?? {};
+    const customerId = String(body.customerId ?? '');
+    const flags = { unsafeRanking: !!body.unsafeRanking, semanticSearch: !!body.semanticSearch };
+
+    const result = await this.handleTurn(customerId, text, flags);
+
+    if (result.ok && result.customerSwitched) {
+      // A different customer arrived on this session id - the visible transcript must
+      // wipe too, not just the working memory handleTurn already reset.
+      await this.saveMessages([]);
+    }
+
+    const stream = createUIMessageStream({
+      execute: async ({ writer }) => {
+        if (!result.ok) {
+          writer.write({ type: 'text-start', id: 'reply' });
+          writer.write({ type: 'text-delta', id: 'reply', delta: result.detail });
+          writer.write({ type: 'text-end', id: 'reply' });
+          return;
+        }
+
+        writer.write({ type: 'text-start', id: 'reply' });
+        // Server-paced typewriter: the reply is already fully known (handleTurn already
+        // ran); this paces its reveal, it does not reduce time-to-first-token.
+        const CHUNK = 3;
+        for (let i = 0; i < result.reply.length; i += CHUNK) {
+          writer.write({ type: 'text-delta', id: 'reply', delta: result.reply.slice(i, i + CHUNK) });
+          await new Promise(resolve => setTimeout(resolve, 12));
+        }
+        writer.write({ type: 'text-end', id: 'reply' });
+
+        writer.write({
+          type: 'data-trace',
+          id: 'turn-trace',
+          data: {
+            intent: result.intent, intent_confidence: result.intent_confidence, agent: result.agent,
+            payload: result.payload, trace: result.trace, memory: result.memory,
+          },
+        });
+      },
+    });
+
+    return createUIMessageStreamResponse({ stream });
   }
 
   async onRequest(req: Request): Promise<Response> {

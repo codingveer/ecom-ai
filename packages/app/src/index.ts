@@ -5,10 +5,13 @@
  * physically cannot query the database.
  */
 import { Hono } from 'hono';
+import { agentsMiddleware } from 'hono-agents';
 import { Kernel, Trace, type GatewayBindings } from './kernel.js';
 
 type Env = GatewayBindings & { SessionAgent: DurableObjectNamespace; ASSETS: Fetcher };
 const app = new Hono<{ Bindings: Env }>();
+
+app.use('*', agentsMiddleware());
 
 const session = (env: Env, id: string) => env.SessionAgent.get(env.SessionAgent.idFromName(id));
 
