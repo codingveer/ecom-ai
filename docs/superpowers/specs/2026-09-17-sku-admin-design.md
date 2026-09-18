@@ -134,6 +134,16 @@ Three additions next to the existing `Catalogue` section:
 
 ## E. Ranking integration (`packages/services/src/index.ts`, `packages/app/src/agents/discovery.ts`)
 
+> **Amendment (post-implementation):** this section originally described applying
+> `relevance_boost` in two layers - once in `lexicalSearch`/`semanticSearch` and again
+> as a separate term in `discovery.ts`'s score formula. That double-counted the boost
+> in lexical mode and was corrected during implementation: the boost is applied exactly
+> once, at the retrieval layer (`lexicalSearch` and `semanticSearch` only);
+> `discovery.rank`'s score formula was left unchanged, with no separate boost term.
+> Separately, a final review fix gated `lexicalSearch`'s application behind "the SKU
+> already has some keyword relevance, or the query is empty" so a boost can't inject a
+> SKU into a search it has zero relation to - see Fix 1 in the final fix-wave report.
+
 `relevance_boost` rides along for free in both search paths - `lexicalSearch` and
 `semanticSearch` both `SELECT p.*`, so the new column is already present on every
 candidate object without touching either function's signature. Two small additions:

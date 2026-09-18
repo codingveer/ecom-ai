@@ -220,15 +220,16 @@ document.getElementById('overlay').addEventListener('click', closeEditor);
 
 document.getElementById('save').addEventListener('click', async () => {
   if (!editingSku) return;
+  const clearable = v => v === '' ? ' ' : v;
   const body = {
     category: document.getElementById('f_category').value,
     department: document.getElementById('f_department').value,
     price_tier: document.getElementById('f_price_tier').value,
     cut: document.getElementById('f_cut').value,
-    brand: document.getElementById('f_brand').value,
-    colour: document.getElementById('f_colour').value,
-    material: document.getElementById('f_material').value,
-    style_tags: document.getElementById('f_style_tags').value,
+    brand: clearable(document.getElementById('f_brand').value),
+    colour: clearable(document.getElementById('f_colour').value),
+    material: clearable(document.getElementById('f_material').value),
+    style_tags: clearable(document.getElementById('f_style_tags').value),
     relevance_boost: Number(document.getElementById('f_relevance_boost').value || 0),
   };
   const res = await fetch(`/admin/products/${encodeURIComponent(editingSku)}`, {

@@ -125,7 +125,7 @@ async function lexicalSearch(env: Env, terms: string[], category: string | null,
       if (String(r.category).toLowerCase().startsWith(t.replace(/e?s$/, ''))) score += 3;
       if (String(r.style_tags).toLowerCase().includes(t)) score += 2;
     }
-    score += Number(r.relevance_boost ?? 0);
+    if (terms.length === 0 || score > 0) score += Number(r.relevance_boost ?? 0);
     return { ...r, relevance: score };
   }).filter(r => (terms.length === 0 ? true : r.relevance > 0) && r.stock > 0)
     .sort((a, b) => b.relevance - a.relevance || b.rating - a.rating)
@@ -296,8 +296,9 @@ app.post('/admin/products/:sku', async c => {
   const body = await c.req.json<any>();
   const next = { ...existing };
   for (const field of ADMIN_EDITABLE_FIELDS) {
-    if (body[field] !== undefined) next[field] = field === 'relevance_boost' ? Number(body[field]) : String(body[field]);
+    if (body[field] !== undefined) next[field] = field === 'relevance_boost' ? Number(body[field]) : String(body[field]).trim();
   }
+  if (!Number.isFinite(next.relevance_boost)) return c.json({ error: 'relevance_boost must be a finite number' }, 400);
 
   const description = describeProduct({
     title: next.title, category: next.category, brand: next.brand, colour: next.colour,

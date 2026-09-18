@@ -28,7 +28,10 @@ shopper would rather than read the trace panel.
 A tagging admin lives at http://localhost:8100/admin.html — search the catalogue,
 retag a SKU's category/tags/attributes or set a manual relevance boost, and the change
 re-embeds into the semantic search index immediately (falls back to a "stale until
-reindexed" notice if the embed/upsert step fails).
+reindexed" notice if the embed/upsert step fails). If `/admin/products` returns
+`unknown_tool`, the local KV tool registry predates this feature — run
+`curl -X POST localhost:8102/registry/reset` (or `npm run smoke`, which does this as a
+side effect) to pick up the new contracts.
 
 ## Deploying
 
@@ -40,6 +43,10 @@ wrangler vectorize create-metadata-index neutail-catalogue --property-name=categ
 npm run db:remote
 npm run deploy                      # services, tools, llm, app in dependency order
 ```
+
+The admin page (`/admin.html`) and its `/admin/products*` routes have no
+authentication — fine for local development, but do not deploy this branch to a
+publicly reachable environment without adding access control in front of them first.
 
 Semantic search's index is populated by `npm run catalogue:reindex`, which POSTs to a
 locally running `services` Worker. For local data that's `npm run dev:services`; against
@@ -144,8 +151,8 @@ curl -X POST localhost:8102/registry/install -H 'content-type: application/json'
   "input_schema":{"category":{"type":"string","required":true},"days":{"type":"integer","required":false,"default":30}},
   "output_schema":{"category":"string","trending":"array"},
   "transport":{"service":"services","method":"GET","path":"/catalogue/trending/{category}"}}'
-# registry 19 -> 20, and the tool is callable on the next invoke
-curl -X POST localhost:8102/registry/reset   # back to the bundled 19
+# registry 22 -> 23, and the tool is callable on the next invoke
+curl -X POST localhost:8102/registry/reset   # back to the bundled 22
 ```
 
 LLM gateway surfaces: `GET /routing`, `GET /prompts`, `GET /usage`, `GET /calls`.

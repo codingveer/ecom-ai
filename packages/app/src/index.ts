@@ -92,7 +92,7 @@ app.post('/admin/products/:sku', async c => {
   let body: any;
   try { body = await c.req.json(); } catch { return c.json({ error: 'invalid_json' }, 400); }
   try {
-    return c.json(await k.invoke('catalogue.admin.update', { sku: c.req.param('sku'), ...body }));
+    return c.json(await k.invoke('catalogue.admin.update', { ...body, sku: c.req.param('sku') }));
   } catch (e) { return c.json({ error: String(e) }, 502); }
 });
 

@@ -60,7 +60,7 @@ curl -X POST localhost:8102/registry/install -H 'content-type: application/json'
   "output_schema":{"category":"string","trending":"array"},
   "transport":{"service":"services","method":"GET","path":"/catalogue/trending/{category}"}}'
 ```
-Denied by contract; registry goes from 19 tools to 20 with no agent code touched. (The
+Denied by contract; registry goes from 22 tools to 23 with no agent code touched. (The
 contract being installed lives at `packages/tools/registry/available/catalogue.trending.get.json`
 if you want to show the file rather than type the JSON inline. Reset with
 `curl -X POST localhost:8102/registry/reset` afterwards.)
@@ -118,6 +118,10 @@ party-ish query and show the retagged SKU's rank move. Say this out loud: the
 ranking math (`discovery.ts`'s segment weighting, diversity floor, fairness
 guardrail) was never the problem — the underlying tag data was random. This is the
 fix, live.
+
+If `/admin/products` returns `unknown_tool`, the local KV tool registry predates this
+feature — run `curl -X POST localhost:8102/registry/reset` (or `npm run smoke`, which
+does this as a side effect) to pick up the new contracts.
 
 ---
 
