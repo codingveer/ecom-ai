@@ -1,0 +1,11 @@
+{
+  "name": "catalogue.admin.get",
+  "version": "1.0.0",
+  "purpose": "Fetch one product's full editable record by SKU.",
+  "allowed_agents": ["admin"],
+  "input_schema": {
+    "sku": { "type": "string", "required": true }
+  },
+  "output_schema": { "sku": "string" },
+  "transport": { "service": "services", "method": "GET", "path": "/admin/products/{sku}" }
+}

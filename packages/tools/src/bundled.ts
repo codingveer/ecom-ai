@@ -20,6 +20,133 @@ export const BUNDLED: ToolContract[] = [
     }
   },
   {
+    "name": "catalogue.admin.get",
+    "version": "1.0.0",
+    "purpose": "Fetch one product's full editable record by SKU.",
+    "allowed_agents": [
+      "admin"
+    ],
+    "input_schema": {
+      "sku": {
+        "type": "string",
+        "required": true
+      }
+    },
+    "output_schema": {
+      "sku": "string"
+    },
+    "transport": {
+      "service": "services",
+      "method": "GET",
+      "path": "/admin/products/{sku}"
+    }
+  },
+  {
+    "name": "catalogue.admin.list",
+    "version": "1.0.0",
+    "purpose": "List and search the full catalogue for admin tagging, unfiltered by stock or department.",
+    "allowed_agents": [
+      "admin"
+    ],
+    "input_schema": {
+      "q": {
+        "type": "string",
+        "required": false,
+        "description": "matches sku, title, or brand"
+      },
+      "category": {
+        "type": "string",
+        "required": false
+      },
+      "department": {
+        "type": "string",
+        "required": false
+      },
+      "page": {
+        "type": "integer",
+        "required": false,
+        "default": 1
+      },
+      "pageSize": {
+        "type": "integer",
+        "required": false,
+        "default": 50
+      }
+    },
+    "output_schema": {
+      "page": "integer",
+      "pageSize": "integer",
+      "total": "integer",
+      "results": "array"
+    },
+    "transport": {
+      "service": "services",
+      "method": "GET",
+      "path": "/admin/products"
+    }
+  },
+  {
+    "name": "catalogue.admin.update",
+    "version": "1.0.0",
+    "purpose": "Update a product's tagging/attributes, regenerate its description, and re-embed it into the semantic search index.",
+    "allowed_agents": [
+      "admin"
+    ],
+    "input_schema": {
+      "sku": {
+        "type": "string",
+        "required": true
+      },
+      "category": {
+        "type": "string",
+        "required": false
+      },
+      "department": {
+        "type": "string",
+        "required": false
+      },
+      "brand": {
+        "type": "string",
+        "required": false
+      },
+      "colour": {
+        "type": "string",
+        "required": false
+      },
+      "material": {
+        "type": "string",
+        "required": false
+      },
+      "cut": {
+        "type": "string",
+        "required": false
+      },
+      "style_tags": {
+        "type": "string",
+        "required": false,
+        "description": "comma-separated free text"
+      },
+      "price_tier": {
+        "type": "string",
+        "required": false
+      },
+      "relevance_boost": {
+        "type": "number",
+        "required": false
+      }
+    },
+    "output_schema": {
+      "sku": "string",
+      "updated": "boolean",
+      "reindexed": "boolean"
+    },
+    "transport": {
+      "service": "services",
+      "method": "POST",
+      "path": "/admin/products/{sku}"
+    }
+  },
+  {
     "name": "catalogue.inventory.get",
     "version": "1.0.0",
     "purpose": "Live stock by size for one SKU.",
