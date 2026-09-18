@@ -47,6 +47,9 @@ npm run deploy                      # services, tools, llm, app in dependency or
 The admin page (`/admin.html`) and its `/admin/products*` routes have no
 authentication — fine for local development, but do not deploy this branch to a
 publicly reachable environment without adding access control in front of them first.
+Beyond letting anyone retag the catalogue, every save also triggers a Workers AI embed
+and a Vectorize upsert, so an exposed admin page is a cost exposure, not just a
+data-integrity one.
 
 Semantic search's index is populated by `npm run catalogue:reindex`, which POSTs to a
 locally running `services` Worker. For local data that's `npm run dev:services`; against

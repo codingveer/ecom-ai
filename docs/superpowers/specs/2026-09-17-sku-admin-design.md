@@ -148,11 +148,16 @@ Three additions next to the existing `Catalogue` section:
 `semanticSearch` both `SELECT p.*`, so the new column is already present on every
 candidate object without touching either function's signature. Two small additions:
 
-- `lexicalSearch`'s per-term scoring loop (`index.ts:120-128`) adds
-  `score += Number(r.relevance_boost ?? 0)` once per row, alongside the existing
-  keyword/category/style_tags bumps (comparable ±2/±3 scale).
-- `discovery.ts`'s score formula (line 50) adds one term:
-  `score = relevance*1.0 + tierW*1.4 + rating*0.35 + stockBoost + fitBoost - returnPenalty*1.2 + (p.relevance_boost ?? 0)`.
+- `lexicalSearch`'s per-term scoring loop applies
+  `if (terms.length === 0 || score > 0) score += Number(r.relevance_boost ?? 0)` once per
+  row, alongside the existing keyword/category/style_tags bumps (comparable ±2/±3 scale) -
+  gated as described in the amendment above.
+- `semanticSearch` folds the same boost into its cosine-based `relevance` unconditionally
+  (Vectorize's top-K already bounds candidates to some embedding similarity, so no
+  analogous zero-relevance-injection risk exists there).
+- `discovery.ts`'s score formula is unchanged from before this feature - it consumes
+  `relevance` (which already carries the boost from either retrieval path) at its existing
+  `1.0` coefficient, with no separate boost term.
 
 A boost of 0 (the default for every SKU until an admin sets one) changes nothing -
 existing ranking behaviour for every currently-seeded product is untouched until someone
