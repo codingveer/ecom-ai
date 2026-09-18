@@ -125,6 +125,7 @@ async function lexicalSearch(env: Env, terms: string[], category: string | null,
       if (String(r.category).toLowerCase().startsWith(t.replace(/e?s$/, ''))) score += 3;
       if (String(r.style_tags).toLowerCase().includes(t)) score += 2;
     }
+    score += Number(r.relevance_boost ?? 0);
     return { ...r, relevance: score };
   }).filter(r => (terms.length === 0 ? true : r.relevance > 0) && r.stock > 0)
     .sort((a, b) => b.relevance - a.relevance || b.rating - a.rating)
