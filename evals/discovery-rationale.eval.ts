@@ -29,7 +29,17 @@ const cases: Case[] = [
 function noInventedProducts({ output, input }: { output: string; input: Case }) {
   const known = new Set(input.top.flatMap(p => [p.title, p.sku]));
   const mentionsUnknownSku = /SKU-\d{5}/g.test(output) && (output.match(/SKU-\d{5}/g) ?? []).some(sku => !known.has(sku));
-  return { name: 'no_invented_products', score: mentionsUnknownSku ? 0 : 1 };
+
+  // Real output references products by name in prose, not by SKU - the SKU check above
+  // almost never fires. This catches the more realistic failure mode: a Title-Case
+  // multi-word phrase (a plausible invented product name) that shares no word with any
+  // known title, e.g. "the Emerald Cocktail Dress" when `top` only has "Cotton Blend Chinos".
+  const titlePhrases = output.match(/\b(?:[A-Z][a-z]+\s+){1,4}[A-Z][a-z]+\b/g) ?? [];
+  const knownWords = new Set(input.top.flatMap(p => p.title.split(/\s+/)));
+  const mentionsUnknownTitle = titlePhrases.some(phrase =>
+    !phrase.split(/\s+/).some(word => knownWords.has(word)));
+
+  return { name: 'no_invented_products', score: (mentionsUnknownSku || mentionsUnknownTitle) ? 0 : 1 };
 }
 
 function respectsGuardrail({ output, input }: { output: string; input: Case }) {
