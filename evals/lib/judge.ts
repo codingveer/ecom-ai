@@ -4,7 +4,9 @@ import type { EvalScorer } from 'braintrust';
 /**
  * Optional, shared across all five eval files: a coherence check independent of any
  * prompt-specific correctness scorer. Easy to drop from an eval file's `scores` array
- * if the extra OpenAI spend per run isn't wanted.
+ * if the extra OpenAI spend per run isn't wanted - or, as in intent-classify.eval.ts,
+ * when the target prompt's output isn't prose (its "coherent reply" rubric doesn't fit
+ * a JSON-only response).
  *
  * Cast to `EvalScorer<any, string, any, any>`: autoevals types an `LLMClassifierFromTemplate`
  * scorer's `expected` field as `string | undefined`, but each eval file's `Expected` case

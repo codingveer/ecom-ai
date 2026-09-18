@@ -1,6 +1,11 @@
 import { Eval } from 'braintrust';
 import { runPrompt } from './lib/harness.js';
-import { coherenceJudge } from './lib/judge.js';
+
+// coherenceJudge (evals/lib/judge.ts) is intentionally omitted here: intent.classify's
+// system prompt demands raw JSON only ("no prose, no markdown fences"), but the judge's
+// rubric asks whether a "reply" is coherent, on-topic, and appropriately toned - a rubric
+// written for prose. Scoring JSON against it isn't a meaningful signal for this prompt
+// specifically; the other eval files' prose-output prompts should keep it.
 
 type Case = { utterance: string; history: string; expectedIntent: string };
 
@@ -38,5 +43,5 @@ Eval('neutail-intent-classify', {
   })),
   task: async (input: { utterance: string; history: string }) =>
     runPrompt('intent.classify', { utterance: input.utterance, history: input.history }),
-  scores: [parsesAsJson, intentMatches, coherenceJudge],
+  scores: [parsesAsJson, intentMatches],
 });
