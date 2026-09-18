@@ -186,6 +186,7 @@ export class SessionDO {
         agentName = 'loyalty';
         const lk = new Kernel('loyalty', trace, this.env);
         const redeemMatch = text.match(/redeem\s+(-?\d+)/i);
+        const statusQuery = /\bhow (many|much)\b/i.test(text) || /\bbalance\b/i.test(text);
         if (redeemMatch) {
           const amount = Number(redeemMatch[1]);
           if (amount <= 0) {
@@ -198,6 +199,13 @@ export class SessionDO {
               ? `Redeemed ${amount} points. Balance is now ${r.balance}, and GBP ${r.liability_released_gbp} of point liability has been released.`
               : `That reward needs ${r.shortfall} more points. Your balance is ${r.balance}.`;
           }
+        } else if (statusQuery) {
+          trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent - balance query', m3_ref: 'S5.3' });
+          const st = await loyalty.status(lk, customerId);
+          payload = st;
+          reply = /\bmore\b/i.test(text)
+            ? `You need ${st.points_to_next_tier} more points to reach the next tier. Current balance is ${st.points_balance} points on ${st.tier}.`
+            : `Your balance is ${st.points_balance} points on ${st.tier} tier, with ${st.points_to_next_tier} to the next tier.`;
         } else {
           trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent', m3_ref: 'S5.3' });
           const r = await loyalty.accrue(lk, customerId, 'purchase', Math.round(Number(segment.evidence.avg_unit_price_gbp) || 40));

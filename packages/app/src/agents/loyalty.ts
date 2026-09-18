@@ -31,6 +31,12 @@ export async function accrue(k: Kernel, customerId: string, action: string, base
   return { ...result, multiplier, entitlement: sub.tier, nudge };
 }
 
+export async function status(k: Kernel, customerId: string) {
+  const r = await k.invoke<any>('loyalty.account.get', { customer_id: customerId }, 'S5.3');
+  k.note('agent', `balance read: ${r.points_balance} points on ${r.tier}, ${r.points_to_next_tier} to next tier`, r, 'S5.3');
+  return r;
+}
+
 export async function redeem(k: Kernel, customerId: string, points: number) {
   const r = await k.invoke<any>('loyalty.redeem', { customer_id: customerId, points }, 'S5.13');
   k.note('agent', r.redeemed ? `redeemed ${points} points` : `shortfall of ${r.shortfall} points`,

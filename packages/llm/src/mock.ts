@@ -15,6 +15,16 @@ const INTENT_RULES: Array<[RegExp, string]> = [
   [/\b(show|find|looking for|need|want|search|browse|recommend|suggest|dress|coat|jumper|trousers|shirt|skirt|shoes)\b/i, 'discovery.rank'],
 ];
 
+// discovery.rank's own regex above matches generic verbs ("need", "want", "show") that
+// say nothing about products on their own - "how many more do I need" is not a product
+// search. This subset names an actual item; only it should out-vote the previous turn's
+// topic when a follow-up carries over.
+const DISCOVERY_ITEM_RE = /\b(dress|coat|jumper|trousers|shirt|skirt|shoes)\b/i;
+// A follow-up that opens with one of these, or that carries only a generic verb with no
+// named item, is elliptical - it continues whatever the previous turn was about rather
+// than starting a new topic.
+const CONTINUATION_RE = /^(what about|and|how about|in |the )/i;
+
 const CATEGORY_RULES: Array<[RegExp, string]> = [
   [/\bdress(es)?\b/i, 'dresses'], [/\b(coat|jacket|outerwear)\b/i, 'outerwear'],
   [/\b(jumper|knit|sweater|cardigan)\b/i, 'knitwear'], [/\b(trouser|chino|jean)/i, 'trousers'],
@@ -30,14 +40,24 @@ export function mockComplete(promptId: string, vars: Record<string, any>, system
     case 'intent.classify': {
       const utterance = String(vars.utterance ?? '');
       const history = String(vars.history ?? '');
+      const historyTurns = history.split(' | ').filter(h => h && h !== 'none');
+      const lastIntent = historyTurns.length ? historyTurns[historyTurns.length - 1].split(':')[0].trim() : null;
+
       let intent = 'discovery.rank';
       let confidence = 0.62;
       for (const [re, i] of INTENT_RULES) {
         if (re.test(utterance)) { intent = i; confidence = 0.93; break; }
       }
-      // Multi-turn: a bare follow-up inherits the previous intent's subject.
-      if (/^(what about|and|how about|in |the )/i.test(utterance.trim()) && history.includes('fit.check')) {
-        intent = 'fit.check'; confidence = 0.88;
+
+      // Multi-turn carry-over. Two distinct cases inherit the previous turn's topic:
+      //  - an elliptical opener ("what about the coat") continues the same activity
+      //    on a new subject - naming an item here does NOT mean a new topic;
+      //  - a bare generic verb ("need", "want", "show") with no item named is not
+      //    actually a product search on its own ("how many more do I need").
+      if (lastIntent && lastIntent !== intent) {
+        const isContinuation = CONTINUATION_RE.test(utterance.trim());
+        const isGenericCollision = intent === 'discovery.rank' && !DISCOVERY_ITEM_RE.test(utterance);
+        if (isContinuation || isGenericCollision) { intent = lastIntent; confidence = 0.85; }
       }
       let category: string | null = null;
       for (const [re, c] of CATEGORY_RULES) if (re.test(utterance)) { category = c; break; }
