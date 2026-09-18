@@ -133,6 +133,12 @@ for (const sel of [document.getElementById('category'), document.getElementById(
   }
 }
 
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 let page = 1;
 const pageSize = 50;
 let total = 0;
@@ -157,14 +163,14 @@ async function loadRows() {
     const boost = Number(p.relevance_boost ?? 0);
     const boostClass = boost > 0 ? 'boost-pos' : boost < 0 ? 'boost-neg' : 'muted';
     tr.innerHTML = `
-      <td><img src="${p.image_url ?? ''}" loading="lazy"></td>
-      <td>${p.sku}</td>
-      <td>${p.title}</td>
-      <td class="muted">${p.brand}</td>
-      <td>${p.category}</td>
-      <td class="muted">${p.department}</td>
-      <td class="muted">${p.price_tier}</td>
-      <td class="muted">${p.style_tags}</td>
+      <td><img src="${escapeHtml(p.image_url ?? '')}" loading="lazy"></td>
+      <td>${escapeHtml(p.sku)}</td>
+      <td>${escapeHtml(p.title)}</td>
+      <td class="muted">${escapeHtml(p.brand)}</td>
+      <td>${escapeHtml(p.category)}</td>
+      <td class="muted">${escapeHtml(p.department)}</td>
+      <td class="muted">${escapeHtml(p.price_tier)}</td>
+      <td class="muted">${escapeHtml(p.style_tags)}</td>
       <td class="${boostClass}">${boost}</td>`;
     tr.addEventListener('click', () => openEditor(p.sku));
     tbody.appendChild(tr);
