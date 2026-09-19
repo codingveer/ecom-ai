@@ -19,5 +19,10 @@
     { "binding": "TOOLS", "service": "neutail-tools" },
     { "binding": "LLM", "service": "neutail-llm" }
   ],
+  // Opaque access tokens gating real-AI (vs. the mock default) per session, admin-managed
+  // via /admin/ai-keys in index.ts. Never holds a real provider key - see the comment there.
+  "kv_namespaces": [
+    { "binding": "AI_ACCESS_KEYS", "id": "1dd3bce9f23f4cf8923fcf3f477a9e05" }
+  ],
   "assets": { "directory": "public", "binding": "ASSETS" }
 }

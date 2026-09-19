@@ -27,8 +27,18 @@ export class Trace {
 
 export type PolicyVerdict = { policy: string; decision: 'pass' | 'block'; detail: string };
 
+export type KernelOptions = {
+  /**
+   * Forces the `openai` provider for every `llm()` call this Kernel makes, overriding
+   * the LLM gateway's own `LLM_PROVIDER` default (normally `mock`). Set only by
+   * SessionAgent.handleTurn, and only after validating an access-key token against KV
+   * (see session-do.ts's checkLiveAI) - agents themselves never decide this.
+   */
+  liveAI?: boolean;
+};
+
 export class Kernel {
-  constructor(public agent: string, public trace: Trace, private env: GatewayBindings) {}
+  constructor(public agent: string, public trace: Trace, private env: GatewayBindings, private opts: KernelOptions = {}) {}
 
   async invoke<T = any>(tool: string, args: Record<string, unknown> = {}, m3_ref?: string): Promise<T> {
     const t0 = Date.now();
@@ -51,7 +61,10 @@ export class Kernel {
     const r = await this.env.LLM.fetch(new Request('https://llm.internal/complete', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ agent: this.agent, prompt_id, variables }),
+      body: JSON.stringify({
+        agent: this.agent, prompt_id, variables,
+        ...(this.opts.liveAI ? { provider_override: 'openai' } : {}),
+      }),
     }));
     const body = await r.json<any>();
     if (!body.ok) throw new Error(`llm ${prompt_id} failed`);

@@ -47,7 +47,8 @@ type State = { customerId: string | null; startedAt: string; turns: Turn[]; work
 type Credits = { used: number; limit: number; requestedMore: boolean };
 const DEFAULT_CREDIT_LIMIT = 3;
 
-type TurnFlags = { unsafeRanking?: boolean; semanticSearch?: boolean };
+type TurnFlags = { unsafeRanking?: boolean; semanticSearch?: boolean; aiKey?: string };
+type Env = GatewayBindings & { AI_ACCESS_KEYS: KVNamespace };
 export type TurnResult =
   | {
       ok: true; reply: string; intent: string; intent_confidence: number; agent: string;
@@ -59,7 +60,19 @@ export type TurnResult =
 
 const ACCEPT = /\b(accept|yes please|yes|upgrade me|sign me up|take it|go ahead)\b/i;
 
-export class SessionAgent extends AIChatAgent<GatewayBindings> {
+export class SessionAgent extends AIChatAgent<Env> {
+  /**
+   * `token` is an opaque admin-issued access key (see /admin/ai-keys in index.ts), never
+   * the real OpenAI key - it only gates whether this turn's Kernel calls are allowed to
+   * override the LLM gateway's mock default. Fails closed (mock) on any lookup error.
+   */
+  private async checkLiveAI(token: string): Promise<boolean> {
+    try {
+      const record = await this.env.AI_ACCESS_KEYS.get<{ active?: boolean }>(`key:${token}`, 'json');
+      return !!record?.active;
+    } catch { return false; }
+  }
+
   private async load(): Promise<State> {
     return (await this.ctx.storage.get<State>('session'))
       ?? { customerId: null, startedAt: new Date().toISOString(), turns: [], working: {} };
@@ -71,9 +84,15 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
   }
 
   async handleTurn(customerId: string, text: string, flags: TurnFlags): Promise<TurnResult> {
+    // The turn budget exists to cap real provider spend, not to throttle the mock demo
+    // (which costs nothing) - so it's only checked/consumed when this turn will actually
+    // reach a live provider. Resolved here, before the gate, rather than down at Kernel
+    // construction time as before.
+    const liveAI = flags.aiKey ? await this.checkLiveAI(flags.aiKey) : false;
+
     // Gate before any LLM/tool call is made - a blocked turn must cost nothing.
     const credits = await this.loadCredits();
-    if (credits.used >= credits.limit) {
+    if (liveAI && credits.used >= credits.limit) {
       return {
         ok: false, error: 'credit_limit_reached',
         detail: `This demo session has used all ${credits.limit} allotted turns. Ask an admin to raise the `
@@ -81,8 +100,10 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
         trace: [], credits,
       };
     }
-    credits.used += 1;
-    await this.ctx.storage.put('credits', credits);
+    if (liveAI) {
+      credits.used += 1;
+      await this.ctx.storage.put('credits', credits);
+    }
 
     let session = await this.load();
 
@@ -115,7 +136,8 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
     session.customerId = customerId;
 
     const trace = new Trace();
-    const orch = new Kernel('orchestrator', trace, this.env);
+    const mk = (actor: string) => new Kernel(actor, trace, this.env, { liveAI });
+    const orch = mk('orchestrator');
     trace.add({ stage: 'route', actor: 'channel', label: 'trigger captured',
       detail: { session: this.ctx.id.toString().slice(0, 12), customerId, utterance: text }, m3_ref: 'S1.2' });
 
@@ -123,7 +145,7 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
     // Sequence 1 runs once per session; everything downstream depends on it.
     if (!session.working.segment) {
       trace.add({ stage: 'route', actor: 'orchestrator', label: 'no segment in session context - dispatching Profiling Agent', m3_ref: 'S1.6' });
-      const { segment } = await profiling.classify(new Kernel('profiling', trace, this.env), customerId);
+      const { segment } = await profiling.classify(mk('profiling'), customerId);
       session.working.segment = segment;
     } else {
       trace.add({ stage: 'memory', actor: 'orchestrator', label: 'segment served from Durable Object storage',
@@ -173,7 +195,7 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
         agentName = 'discovery';
         trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Discovery Agent with segment + fit profile',
           detail: { segment: segment.affluence, category }, m3_ref: 'S2.6' });
-        const dk = new Kernel('discovery', trace, this.env);
+        const dk = mk('discovery');
         let fitSize: string | null = null;
         try {
           const f = await dk.invoke<any>('fit.profile.get', { customer_id: customerId }, 'S2.6');
@@ -195,7 +217,7 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
       case 'fit.check': {
         agentName = 'fit';
         trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Size & Fit Agent', detail: { sku, category }, m3_ref: 'S3.4' });
-        const r = await fit.recommend(new Kernel('fit', trace, this.env), customerId, sku, category);
+        const r = await fit.recommend(mk('fit'), customerId, sku, category);
         payload = r;
         reply = r.explanation;
         if (!r.abstained) {
@@ -208,7 +230,7 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
 
       case 'upsell.moment': {
         agentName = 'upsell';
-        const uk = new Kernel('upsell', trace, this.env);
+        const uk = mk('upsell');
         if (accepting) {
           const sub = await upsell.accept(uk, customerId, session.working.pendingOffer!.tier);
           session.working.pendingOffer = null;
@@ -232,7 +254,7 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
 
       case 'loyalty.event': {
         agentName = 'loyalty';
-        const lk = new Kernel('loyalty', trace, this.env);
+        const lk = mk('loyalty');
         const redeemMatch = text.match(/redeem\s+(-?\d+)/i);
         const statusQuery = /\bhow (many|much)\b/i.test(text) || /\bbalance\b/i.test(text);
         if (redeemMatch) {
@@ -305,7 +327,10 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
     const text = last?.parts?.filter(p => p.type === 'text').map(p => (p as any).text).join('') ?? '';
     const body = options?.body ?? {};
     const customerId = String(body.customerId ?? '');
-    const flags = { unsafeRanking: !!body.unsafeRanking, semanticSearch: !!body.semanticSearch };
+    const flags = {
+      unsafeRanking: !!body.unsafeRanking, semanticSearch: !!body.semanticSearch,
+      aiKey: typeof body.aiKey === 'string' ? body.aiKey : undefined,
+    };
 
     // Mirror the HTTP route's (`/session/:id/message` in index.ts) validation: without
     // this, an empty customerId makes handleTurn treat it as always different from any
@@ -432,8 +457,8 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
 
     let body: any;
     try { body = await req.json(); } catch { return Response.json({ error: 'invalid_json', detail: 'request body must be valid JSON' }, { status: 400 }); }
-    const { customerId, text, unsafeRanking, semanticSearch } = body;
-    const result = await this.handleTurn(customerId, text, { unsafeRanking, semanticSearch });
+    const { customerId, text, unsafeRanking, semanticSearch, aiKey } = body;
+    const result = await this.handleTurn(customerId, text, { unsafeRanking, semanticSearch, aiKey });
     if (!result.ok) return Response.json(result, { status: 500 });
     const { ok, customerSwitched, ...rest } = result;
     return Response.json(rest);

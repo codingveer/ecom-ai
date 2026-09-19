@@ -17,10 +17,33 @@ const SUGGESTIONS = [
 ];
 
 const SESSION_STORAGE_KEY = 'neutail-console-session';
+const AI_KEY_STORAGE_KEY = 'neutail-ai-key';
 
 function newSessionId(customerId: string) {
   return 'web-' + customerId + '-' + Date.now();
 }
+
+/**
+ * One-time capture of an admin-issued `?aiKey=` (see /admin/ai-keys) into localStorage,
+ * then strips it from the visible URL so it doesn't linger in the address bar, browser
+ * history, or get shared in a copied link. Once stored, every turn sends it along (see
+ * ChatSession's `body` below) regardless of whether the URL still has it - the server
+ * (SessionAgent.checkLiveAI) is the only thing that decides if it's actually active.
+ */
+function resolveAiKey(): string | null {
+  try {
+    const url = new URL(window.location.href);
+    const fromUrl = url.searchParams.get('aiKey');
+    if (fromUrl) {
+      localStorage.setItem(AI_KEY_STORAGE_KEY, fromUrl);
+      url.searchParams.delete('aiKey');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+      return fromUrl;
+    }
+    return localStorage.getItem(AI_KEY_STORAGE_KEY);
+  } catch { return null; }
+}
+const AI_KEY = resolveAiKey();
 
 /**
  * Resolves the (customerId, sessionId) pair used on first mount, and does it
@@ -114,7 +137,7 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
   const agent = useAgent({ agent: 'SessionAgent', name: sessionId });
   const { messages, sendMessage, status } = useAgentChat<unknown, ChatMessage>({
     agent,
-    body: () => ({ customerId }),
+    body: () => ({ customerId, ...(AI_KEY ? { aiKey: AI_KEY } : {}) }),
   });
 
   // Seeds the meter before the first turn's `data-credits` part exists. Refetched per

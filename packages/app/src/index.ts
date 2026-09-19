@@ -8,7 +8,10 @@ import { Hono } from 'hono';
 import { agentsMiddleware } from 'hono-agents';
 import { Kernel, Trace, type GatewayBindings } from './kernel.js';
 
-type Env = GatewayBindings & { SessionAgent: DurableObjectNamespace; ASSETS: Fetcher; ADMIN_TOKEN?: string };
+type Env = GatewayBindings & {
+  SessionAgent: DurableObjectNamespace; ASSETS: Fetcher; ADMIN_TOKEN?: string;
+  AI_ACCESS_KEYS: KVNamespace;
+};
 const app = new Hono<{ Bindings: Env }>();
 
 app.use('*', agentsMiddleware());
@@ -57,6 +60,55 @@ app.post('/admin/sessions/:id/credits', async c => {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   });
   return new Response(r.body, r);
+});
+
+/**
+ * Admin-managed access keys that gate real AI (vs. the mock default) per session.
+ * These are opaque tokens minted here, NOT the real OPENAI_API_KEY - that stays a
+ * server-side secret on neutail-llm and is never sent to a browser. A console holding
+ * an active token passes it along on every turn (see App.tsx); SessionAgent.handleTurn
+ * checks it against this same KV store before letting a turn's Kernel calls override
+ * the LLM gateway's mock default (see checkLiveAI in session-do.ts).
+ */
+const adminAuthed = (c: { req: { header(name: string): string | undefined }; env: Env }) =>
+  !!c.env.ADMIN_TOKEN && c.req.header('x-admin-token') === c.env.ADMIN_TOKEN;
+
+app.post('/admin/ai-keys', async c => {
+  if (!adminAuthed(c)) return c.json({ error: 'unauthorized' }, 401);
+  const token = crypto.randomUUID();
+  const record = { active: true, createdAt: new Date().toISOString() };
+  await c.env.AI_ACCESS_KEYS.put(`key:${token}`, JSON.stringify(record));
+  return c.json({ token, ...record });
+});
+
+app.get('/admin/ai-keys', async c => {
+  if (!adminAuthed(c)) return c.json({ error: 'unauthorized' }, 401);
+  const list = await c.env.AI_ACCESS_KEYS.list({ prefix: 'key:' });
+  const keys = await Promise.all(list.keys.map(async k => {
+    const record = await c.env.AI_ACCESS_KEYS.get<any>(k.name, 'json');
+    return { token: k.name.slice('key:'.length), ...record };
+  }));
+  return c.json({ keys });
+});
+
+app.post('/admin/ai-keys/:token/activate', async c => {
+  if (!adminAuthed(c)) return c.json({ error: 'unauthorized' }, 401);
+  const kvKey = `key:${c.req.param('token')}`;
+  const record = await c.env.AI_ACCESS_KEYS.get<any>(kvKey, 'json');
+  if (!record) return c.json({ error: 'not_found' }, 404);
+  record.active = true;
+  await c.env.AI_ACCESS_KEYS.put(kvKey, JSON.stringify(record));
+  return c.json({ token: c.req.param('token'), ...record });
+});
+
+app.post('/admin/ai-keys/:token/deactivate', async c => {
+  if (!adminAuthed(c)) return c.json({ error: 'unauthorized' }, 401);
+  const kvKey = `key:${c.req.param('token')}`;
+  const record = await c.env.AI_ACCESS_KEYS.get<any>(kvKey, 'json');
+  if (!record) return c.json({ error: 'not_found' }, 404);
+  record.active = false;
+  await c.env.AI_ACCESS_KEYS.put(kvKey, JSON.stringify(record));
+  return c.json({ token: c.req.param('token'), ...record });
 });
 
 /**

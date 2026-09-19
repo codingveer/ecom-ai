@@ -68,6 +68,19 @@
   .credits-status .pill.ok{background:#EAF6EC;color:#1a7f37}
   .credits-status .pill.low{background:var(--warn-bg);color:#8A4B2A}
   .credits-status .pill.requested{background:#FDECEC;color:#b3261e}
+
+  .ai-keys-panel{border:1px solid var(--rule);border-radius:8px;padding:16px 18px;margin-bottom:24px;background:var(--front)}
+  .ai-keys-panel h2{font-size:14px;margin:0 0 4px}
+  .ai-keys-panel .sub{font-size:12px;color:var(--mute);margin-bottom:12px}
+  .ai-keys-panel table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+  .ai-keys-panel th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);padding:6px 8px;border-bottom:1px solid var(--rule)}
+  .ai-keys-panel td{padding:6px 8px;border-bottom:1px solid var(--rule);vertical-align:middle}
+  .ai-keys-panel code{font-size:11.5px;word-break:break-all}
+  .ai-keys-panel .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+  .ai-keys-panel .status-dot.active{background:#1a7f37}
+  .ai-keys-panel .status-dot.inactive{background:var(--mute)}
+  .ai-keys-panel button.small{font:inherit;font-size:12px;font-weight:600;padding:4px 10px;border:1px solid var(--rule);border-radius:6px;background:#fff;cursor:pointer}
+  .ai-keys-panel button.small.copy{color:var(--accent);border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -97,6 +110,20 @@
       <button id="c_grant" disabled>Approve increase</button>
     </div>
     <div class="credits-status" id="c_status"></div>
+  </div>
+
+  <div class="ai-keys-panel">
+    <h2>AI access keys — gate real AI on the public site</h2>
+    <div class="sub">Everyone gets mock responses by default. A visitor with an active key's link gets real OpenAI calls instead. Uses the same admin token above.</div>
+    <div class="credits-row">
+      <button id="k_generate">Generate new key</button>
+      <button id="k_refresh" class="small">Refresh list</button>
+    </div>
+    <table>
+      <thead><tr><th>Status</th><th>Token</th><th>Share link</th><th>Created</th><th>Action</th></tr></thead>
+      <tbody id="k_rows"></tbody>
+    </table>
+    <div class="credits-status" id="k_status"></div>
   </div>
 
   <div class="filters">
@@ -345,6 +372,86 @@ document.getElementById('c_grant').addEventListener('click', async () => {
     setCreditsStatus(`Grant failed: ${e}`, 'low');
   }
 });
+
+// AI access keys: opaque tokens (never the real OpenAI key) that gate real AI per
+// visitor. Shares the admin token already captured above.
+function setKeysStatus(text, cls) {
+  const el = document.getElementById('k_status');
+  el.textContent = text;
+  el.className = 'credits-status' + (cls ? ' ' + cls : '');
+}
+
+function shareLinkFor(token) {
+  return `${location.origin}/shop.html?aiKey=${encodeURIComponent(token)}`;
+}
+
+async function loadKeys() {
+  setKeysStatus('Loading…');
+  try {
+    const res = await fetch('/admin/ai-keys', { headers: { 'x-admin-token': tokenInput.value } });
+    const d = await res.json();
+    if (!res.ok || d.error) { setKeysStatus(`Load failed: ${d.error ?? res.status}`, 'low'); return; }
+    const tbody = document.getElementById('k_rows');
+    tbody.innerHTML = '';
+    for (const k of (d.keys ?? []).sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))) {
+      const tr = document.createElement('tr');
+      const link = shareLinkFor(k.token);
+      tr.innerHTML = `
+        <td><span class="status-dot ${k.active ? 'active' : 'inactive'}"></span>${k.active ? 'active' : 'inactive'}</td>
+        <td><code>${escapeHtml(k.token)}</code></td>
+        <td><button class="small copy" data-link="${escapeHtml(link)}">Copy link</button></td>
+        <td class="muted">${escapeHtml(k.createdAt ?? '')}</td>
+        <td><button class="small" data-token="${escapeHtml(k.token)}" data-active="${k.active ? '1' : '0'}">${k.active ? 'Deactivate' : 'Activate'}</button></td>`;
+      tbody.appendChild(tr);
+    }
+    setKeysStatus(`${(d.keys ?? []).length} key(s).`);
+  } catch (e) {
+    setKeysStatus(`Load failed: ${e}`, 'low');
+  }
+}
+
+document.getElementById('k_refresh').addEventListener('click', loadKeys);
+
+document.getElementById('k_generate').addEventListener('click', async () => {
+  setKeysStatus('Generating…');
+  try {
+    const res = await fetch('/admin/ai-keys', {
+      method: 'POST', headers: { 'x-admin-token': tokenInput.value },
+    });
+    const d = await res.json();
+    if (!res.ok || d.error) { setKeysStatus(`Generate failed: ${d.error ?? res.status}`, 'low'); return; }
+    await loadKeys();
+    setKeysStatus('Generated — copy the share link below.', 'ok');
+  } catch (e) {
+    setKeysStatus(`Generate failed: ${e}`, 'low');
+  }
+});
+
+document.getElementById('k_rows').addEventListener('click', async e => {
+  const copyBtn = e.target.closest('button.copy');
+  if (copyBtn) {
+    try { await navigator.clipboard.writeText(copyBtn.dataset.link); setKeysStatus('Link copied.', 'ok'); }
+    catch { setKeysStatus(copyBtn.dataset.link); }
+    return;
+  }
+  const toggleBtn = e.target.closest('button[data-token]');
+  if (toggleBtn) {
+    const action = toggleBtn.dataset.active === '1' ? 'deactivate' : 'activate';
+    setKeysStatus(`${action === 'activate' ? 'Activating' : 'Deactivating'}…`);
+    try {
+      const res = await fetch(`/admin/ai-keys/${encodeURIComponent(toggleBtn.dataset.token)}/${action}`, {
+        method: 'POST', headers: { 'x-admin-token': tokenInput.value },
+      });
+      const d = await res.json();
+      if (!res.ok || d.error) { setKeysStatus(`${action} failed: ${d.error ?? res.status}`, 'low'); return; }
+      await loadKeys();
+    } catch (err) {
+      setKeysStatus(`${action} failed: ${err}`, 'low');
+    }
+  }
+});
+
+loadKeys();
 </script>
 </body>
 </html>
