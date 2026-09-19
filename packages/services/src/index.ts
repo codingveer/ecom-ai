@@ -193,7 +193,7 @@ const STOP_WORDS = new Set([
   'i', 'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of',
   'with', 'by', 'is', 'are', 'am', 'was', 'be', 'have', 'has', 'do', 'does', 'it', 'its',
   'this', 'that', 'some', 'need', 'want', 'get', 'me', 'my', 'we', 'our', 'you', 'your',
-  'looking', 'find', 'show', 'me', 'please', 'something',
+  'looking', 'find', 'show', 'me', 'please', 'something', 'give', 'any',
 ]);
 
 const SYNONYMS: Record<string, string[]> = {
@@ -217,6 +217,22 @@ function expandTerms(raw: string[]): string[] {
     if (syns) syns.forEach(s => out.add(s));
   }
   return [...out];
+}
+
+function buildQualifyingTerms(rawTerms: string[]): Set<string> {
+  const isWildcardOnly = rawTerms.length > 0 && rawTerms.every(t => t === 'clothes' || t === 'clothing');
+  if (isWildcardOnly || rawTerms.length === 0) {
+    return new Set(expandTerms(rawTerms));
+  }
+  const qualifying = new Set<string>();
+  for (const t of rawTerms) {
+    if (t !== 'clothes' && t !== 'clothing') {
+      qualifying.add(t);
+      const syns = SYNONYMS[t];
+      if (syns) syns.forEach(s => qualifying.add(s));
+    }
+  }
+  return qualifying;
 }
 
 // The seeded catalogue (scripts/lib/fashion-catalog.ts) only covers three departments -
@@ -263,15 +279,10 @@ const MIN_SIMILARITY = 0.64;
 // Vectorize's cosine similarity before blending the two in hybridSearch - not a cutoff.
 const LEXICAL_SCORE_CEILING = 10;
 
-function scoreLexical(r: any, rawTerms: string[], expanded: string[], isWildcardBrowse: boolean) {
+function scoreLexical(r: any, rawTerms: string[], expanded: string[], qualifyingTerms: Set<string>, isWildcardBrowse: boolean) {
   const hay = `${r.title} ${r.category} ${r.style_tags} ${r.material} ${r.colour}`.toLowerCase();
   const styleTags = String(r.style_tags).toLowerCase();
   let score = 0;
-  // A generic synonym expansion (e.g. "warm" -> coat/jacket/knitwear) matches broad swaths
-  // of the catalogue on its own - useful for boosting a product that's already relevant,
-  // but it can't be what makes a product relevant in the first place. Require at least one
-  // hit that traces back to a word the customer actually typed (unless this is the
-  // deliberate "clothes" wildcard browse - see isWildcardBrowse below).
   let literalHit = rawTerms.length === 0 || isWildcardBrowse;
   for (const t of expanded) {
     const hayHit = hasWord(hay, t);
@@ -280,7 +291,7 @@ function scoreLexical(r: any, rawTerms: string[], expanded: string[], isWildcard
     if (hayHit) score += 2;
     if (catHit) score += 3;
     if (tagHit) score += 2;
-    if ((hayHit || catHit || tagHit) && rawTerms.includes(t)) literalHit = true;
+    if ((hayHit || catHit || tagHit) && qualifyingTerms.has(t)) literalHit = true;
   }
   return { score, literalHit };
 }
@@ -304,17 +315,11 @@ async function fetchCandidateRows(env: Env, category: string | null, department:
 async function lexicalSearch(env: Env, rawTerms: string[], category: string | null, department: string | undefined, limit: number) {
   const rows = await fetchCandidateRows(env, category, department);
   const expanded = expandTerms(rawTerms);
-  // "clothes"/"clothing" are the one deliberate wildcard in SYNONYMS - their expansion
-  // (top/dress/trouser/skirt/jacket/knitwear) is meant to stand in for "anything apparel"
-  // for a generic browse, not to smuggle a real category match past the literal-term gate
-  // below. Every other synonym key still has to earn its match through an actual word hit.
-  // Only a bare "clothes"/"clothing" query (nothing else descriptive left after stopword
-  // removal) counts as the wildcard browse - "warm clothes for winter" still has "warm" and
-  // "winter" that need to earn their own match, so the gate stays on for those terms.
   const isWildcardBrowse = rawTerms.length > 0 && rawTerms.every(t => t === 'clothes' || t === 'clothing');
+  const qualifyingTerms = buildQualifyingTerms(rawTerms);
 
   return rows.map(r => {
-    const { score, literalHit } = scoreLexical(r, rawTerms, expanded, isWildcardBrowse);
+    const { score, literalHit } = scoreLexical(r, rawTerms, expanded, qualifyingTerms, isWildcardBrowse);
     const relevance = literalHit && score >= MIN_RELEVANCE ? score + Number(r.relevance_boost ?? 0) : score;
     return { ...r, relevance, literalHit };
   }).filter(r => r.literalHit && r.relevance >= MIN_RELEVANCE && r.stock > 0)
@@ -356,18 +361,20 @@ async function hybridSearch(env: Env, rawTerms: string[], q: string, category: s
   ]);
   const semanticBySku = new Map(vectorMatches.map(m => [m.id, m.score]));
   const expanded = expandTerms(rawTerms);
-  // Only a bare "clothes"/"clothing" query (nothing else descriptive left after stopword
-  // removal) counts as the wildcard browse - "warm clothes for winter" still has "warm" and
-  // "winter" that need to earn their own match, so the gate stays on for those terms.
   const isWildcardBrowse = rawTerms.length > 0 && rawTerms.every(t => t === 'clothes' || t === 'clothing');
+  const qualifyingTerms = buildQualifyingTerms(rawTerms);
 
   return rows.map(r => {
-    const { score: lexicalScore, literalHit } = scoreLexical(r, rawTerms, expanded, isWildcardBrowse);
+    const { score: lexicalScore, literalHit } = scoreLexical(r, rawTerms, expanded, qualifyingTerms, isWildcardBrowse);
     const semanticScore = semanticBySku.get(r.sku) ?? 0;
     const qualifies = literalHit || semanticScore >= MIN_SIMILARITY;
     const lexicalNorm = Math.min(1, lexicalScore / LEXICAL_SCORE_CEILING);
     const semanticNorm = Math.max(0, Math.min(1, semanticScore));
-    const relevance = r2(lexicalNorm * 0.5 + semanticNorm * 0.5 + Number(r.relevance_boost ?? 0) / 20);
+    // Blended is 0..1; multiply by LEXICAL_SCORE_CEILING so relevance is calibrated on the
+    // same 0..10+ scale as lexicalSearch, allowing discovery ranking to appropriately weight
+    // relevance over customer tier weights and minor star rating differences.
+    const blended = lexicalNorm * 0.5 + semanticNorm * 0.5;
+    const relevance = r2(blended * LEXICAL_SCORE_CEILING + Number(r.relevance_boost ?? 0));
     return { ...r, relevance, qualifies, lexicalScore, semanticScore: r2(semanticScore) };
   }).filter(r => r.qualifies && r.stock > 0)
     .sort((a, b) => b.relevance - a.relevance || b.rating - a.rating)

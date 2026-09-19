@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-desktop-config.json",
+  "mcpServers": {
+    "neutail-stdio": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "tsx",
+        "/Users/veereshh/Documents/Projects/Hackathon/files/neu-tail-cloudflare/scripts/mcp-server.ts"
+      ],
+      "env": {
+        "NEUTAIL_TOOLS_URL": "http://localhost:8102"
+      }
+    },
+    "neutail-remote-http": {
+      "url": "http://localhost:8102/mcp"
+    }
+  }
+}

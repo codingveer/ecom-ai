@@ -11,8 +11,9 @@
 import { Hono } from 'hono';
 import { BUNDLED } from './bundled.js';
 import type { ToolContract } from './types.js';
+import { createToolsMcpHandler } from './mcp.js';
 
-type Env = {
+export type Env = {
   REGISTRY: KVNamespace;
   SERVICES: Fetcher;
   AUDIT?: AnalyticsEngineDataset;
@@ -21,7 +22,7 @@ type Env = {
 const KEY = 'registry:v1';
 const app = new Hono<{ Bindings: Env }>();
 
-async function loadRegistry(env: Env): Promise<Map<string, ToolContract>> {
+export async function loadRegistry(env: Env): Promise<Map<string, ToolContract>> {
   let list = await env.REGISTRY.get<ToolContract[]>(KEY, 'json');
   if (!list) {
     list = BUNDLED;
@@ -93,36 +94,54 @@ app.post('/registry/reset', async c => {
   return c.json({ reset: true, count: BUNDLED.length });
 });
 
-/** The single entry point every agent uses. */
-app.post('/invoke', async c => {
+export type ExecuteToolResult =
+  | { ok: true; status: number; tool: string; version: string; latency_ms: number; data: unknown }
+  | { ok: false; status: number; error: string; tool: string; detail?: string; errors?: string[] };
+
+/**
+ * Executes a tool contract against the services Worker, with schema validation,
+ * permission checks, and audit logging. Shared between /invoke and /mcp.
+ */
+export async function executeTool(
+  env: Env,
+  tool: string,
+  agent: string,
+  args: Record<string, unknown> = {},
+  options: { skipAgentCheck?: boolean } = {}
+): Promise<ExecuteToolResult> {
   const started = Date.now();
-  const { agent, tool, args = {} } = await c.req.json<any>();
-  const reg = await loadRegistry(c.env);
+  const reg = await loadRegistry(env);
   const contract = reg.get(tool);
 
   if (!contract) {
-    audit(c.env, ['invoke.rejected', tool ?? '-', agent ?? '-', 'unknown_tool'], [0]);
-    return c.json({ ok: false, error: 'unknown_tool', tool }, 404);
+    audit(env, ['invoke.rejected', tool ?? '-', agent ?? '-', 'unknown_tool'], [0]);
+    return { ok: false, status: 404, error: 'unknown_tool', tool };
   }
-  if (!contract.allowed_agents.includes(agent)) {
-    audit(c.env, ['invoke.denied', tool, agent, 'permission_denied'], [0]);
-    return c.json({
-      ok: false, error: 'permission_denied', tool, agent,
+  if (!options.skipAgentCheck && !contract.allowed_agents.includes(agent)) {
+    audit(env, ['invoke.denied', tool, agent, 'permission_denied'], [0]);
+    return {
+      ok: false,
+      status: 403,
+      error: 'permission_denied',
+      tool,
       detail: `contract ${tool}@${contract.version} permits [${contract.allowed_agents.join(', ')}]`,
-    }, 403);
+    };
   }
 
   const { errors, coerced } = validate(contract, args);
   if (errors.length) {
-    audit(c.env, ['invoke.invalid', tool, agent, errors.join('; ')], [0]);
-    return c.json({ ok: false, error: 'contract_violation', tool, errors }, 400);
+    audit(env, ['invoke.invalid', tool, agent, errors.join('; ')], [0]);
+    return { ok: false, status: 400, error: 'contract_violation', tool, errors };
   }
 
   let path = contract.transport.path;
   const remaining = { ...coerced };
   for (const key of Object.keys(coerced)) {
     const token = `{${key}}`;
-    if (path.includes(token)) { path = path.replace(token, encodeURIComponent(String(coerced[key]))); delete remaining[key]; }
+    if (path.includes(token)) {
+      path = path.replace(token, encodeURIComponent(String(coerced[key])));
+      delete remaining[key];
+    }
   }
   let url = `https://services.internal${path}`;
   const init: RequestInit = { method: contract.transport.method };
@@ -137,15 +156,50 @@ app.post('/invoke', async c => {
   try {
     // Service binding: a direct Worker-to-Worker call. No public internet hop, no
     // credentials to manage, and the services Worker can stay internal-only.
-    const r = await c.env.SERVICES.fetch(new Request(url, init));
+    const r = await env.SERVICES.fetch(new Request(url, init));
     const data = await r.json();
     const ms = Date.now() - started;
-    audit(c.env, ['invoke', tool, agent, contract.version], [r.status, ms]);
-    return c.json({ ok: r.ok, tool, version: contract.version, latency_ms: ms, data });
+    audit(env, ['invoke', tool, agent, contract.version], [r.status, ms]);
+    if (r.ok) {
+      return { ok: true, status: r.status, tool, version: contract.version, latency_ms: ms, data };
+    }
+    return {
+      ok: false,
+      status: r.status,
+      error: 'service_error',
+      tool,
+      detail: typeof data === 'object' && data && 'error' in data ? String((data as any).error) : undefined,
+    };
   } catch (e) {
-    audit(c.env, ['invoke.error', tool, agent, String(e)], [502, Date.now() - started]);
-    return c.json({ ok: false, error: 'service_unreachable', tool, detail: String(e) }, 502);
+    audit(env, ['invoke.error', tool, agent, String(e)], [502, Date.now() - started]);
+    return { ok: false, status: 502, error: 'service_unreachable', tool, detail: String(e) };
   }
+}
+
+/** The single entry point every agent uses (preserved for backwards-compatibility). */
+app.post('/invoke', async c => {
+  const { agent, tool, args = {} } = await c.req.json<any>();
+  const res = await executeTool(c.env, tool, agent, args);
+  if (!res.ok) {
+    return c.json(res, res.status as any);
+  }
+  return c.json({
+    ok: true,
+    tool: res.tool,
+    version: res.version,
+    latency_ms: res.latency_ms,
+    data: res.data,
+  });
+});
+
+/** Standard Model Context Protocol (MCP) Streamable HTTP endpoint for Claude, Cursor, and IDEs. */
+app.all('/mcp', async c => {
+  const handler = createToolsMcpHandler(c.env);
+  let ctx: any;
+  try {
+    ctx = c.executionCtx;
+  } catch {}
+  return handler(c.req.raw, c.env, ctx);
 });
 
 app.post('/proxy/catalogue/reindex', async c => {

@@ -110,6 +110,13 @@
   .login-card button:disabled{opacity:.5;cursor:default}
   .login-error{font-size:12.5px;color:#b3261e;margin-top:12px;min-height:1em}
   #logout{font:inherit;font-size:12px;color:var(--mute);background:none;border:0;cursor:pointer;margin-left:auto;padding:0}
+
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--rule);margin-bottom:24px}
+  .tabs button{font:inherit;font-size:13px;font-weight:600;color:var(--mute);background:none;border:0;
+    padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tabs button.active{color:var(--ink);border-bottom-color:var(--accent)}
+  .tab-panel{display:none}
+  .tab-panel.active{display:block}
 </style>
 </head>
 <body>
@@ -133,6 +140,34 @@
 </div>
 
 <main id="adminApp" style="display:none">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="users">Users</button>
+    <button class="tab-btn" data-tab="catalogue">Catalogue</button>
+    <button class="tab-btn" data-tab="access">Credits &amp; AI access</button>
+  </div>
+
+  <div class="tab-panel active" id="tab-users">
+  <div class="filters">
+    <input id="u_q" placeholder="Search id, name, or email&hellip;">
+    <input id="u_city" placeholder="City">
+    <button id="u_search">Search</button>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>ID</th><th>Name</th><th>Email</th><th>City</th><th>Joined</th><th>Tier</th><th>Lifetime spend</th>
+    </tr></thead>
+    <tbody id="u_rows"></tbody>
+  </table>
+
+  <div class="pager">
+    <span id="u_pageInfo"></span>
+    <button id="u_prev">&larr; Prev</button>
+    <button id="u_next">Next &rarr;</button>
+  </div>
+  </div>
+
+  <div class="tab-panel" id="tab-access">
   <div class="credits-panel">
     <h2>Session credits — approve a turn-limit increase</h2>
     <div class="credits-row">
@@ -165,7 +200,9 @@
     </table>
     <div class="credits-status" id="k_status"></div>
   </div>
+  </div>
 
+  <div class="tab-panel" id="tab-catalogue">
   <div class="filters">
     <input id="q" placeholder="Search sku, title, or brand&hellip;">
     <select id="category"><option value="">All categories</option></select>
@@ -188,25 +225,6 @@
     <button id="prev">&larr; Prev</button>
     <button id="next">Next &rarr;</button>
   </div>
-
-  <div class="section-heading">Users</div>
-  <div class="filters">
-    <input id="u_q" placeholder="Search id, name, or email&hellip;">
-    <input id="u_city" placeholder="City">
-    <button id="u_search">Search</button>
-  </div>
-
-  <table>
-    <thead><tr>
-      <th>ID</th><th>Name</th><th>Email</th><th>City</th><th>Joined</th><th>Tier</th><th>Lifetime spend</th>
-    </tr></thead>
-    <tbody id="u_rows"></tbody>
-  </table>
-
-  <div class="pager">
-    <span id="u_pageInfo"></span>
-    <button id="u_prev">&larr; Prev</button>
-    <button id="u_next">Next &rarr;</button>
   </div>
 </main>
 
@@ -390,6 +408,13 @@ const TOKEN_KEY = 'neutail-admin-token';
 const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) ?? ''; } catch { return ''; } };
 const setToken = t => { try { localStorage.setItem(TOKEN_KEY, t); } catch { /* ignore */ } };
 const clearToken = () => { try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ } };
+
+for (const btn of document.querySelectorAll('.tab-btn')) {
+  btn.addEventListener('click', () => {
+    for (const b of document.querySelectorAll('.tab-btn')) b.classList.toggle('active', b === btn);
+    for (const panel of document.querySelectorAll('.tab-panel')) panel.classList.toggle('active', panel.id === `tab-${btn.dataset.tab}`);
+  });
+}
 
 function showAdminApp() {
   document.getElementById('loginScreen').style.display = 'none';

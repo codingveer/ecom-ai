@@ -22,7 +22,9 @@
     "classify": "tsx scripts/classify-catalog.ts",
     "catalogue:reindex": "tsx scripts/reindex-catalogue.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json && tsc -p tsconfig.evals.json && npm run typecheck --workspace @neutail/console",
-    "eval": "braintrust eval evals"
+    "eval": "braintrust eval evals",
+    "mcp:stdio": "tsx scripts/mcp-server.ts",
+    "mcp:test": "tsx scripts/test-mcp.ts"
   },
   "dependencies": {
     "@cloudflare/ai-chat": "^0.12.0",

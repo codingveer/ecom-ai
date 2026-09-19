@@ -8,3 +8,4 @@ node_modules/
 .env.braintrust
 .braintrust.json
 scripts/.classify-cache.json
+.claude/
