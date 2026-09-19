@@ -83,6 +83,23 @@
   .ai-keys-panel button.small{font:inherit;font-size:12px;font-weight:600;padding:4px 10px;border:1px solid var(--rule);border-radius:6px;background:#fff;cursor:pointer}
   .ai-keys-panel button.small.copy{color:var(--accent);border-color:var(--accent)}
 
+  .section-heading{font-size:14px;font-weight:700;margin:32px 0 12px}
+  .user-panel{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:92vw;background:#fff;border-left:1px solid var(--rule);
+    box-shadow:-8px 0 24px rgba(0,0,0,.08);padding:22px;overflow-y:auto;transform:translateX(100%);transition:transform .15s ease;z-index:20}
+  .user-panel.open{transform:translateX(0)}
+  .user-panel h2{font-size:15px;margin:0 0 2px}
+  .user-panel .sub{font-size:12px;color:var(--mute);margin-bottom:16px}
+  .user-panel h3{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin:18px 0 6px;border-top:1px solid var(--rule);padding-top:14px}
+  .user-panel h3:first-of-type{border-top:0;padding-top:0}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:13px}
+  .kv dt{color:var(--mute)}
+  .kv dd{margin:0}
+  .user-panel .activity-list{list-style:none;margin:0;padding:0;font-size:12.5px}
+  .user-panel .activity-list li{padding:5px 0;border-bottom:1px solid var(--rule)}
+  .user-panel .activity-list li:last-child{border-bottom:0}
+  .user-panel .empty{color:var(--mute);font-size:12.5px}
+  #userPanelClose{margin-top:18px;font:inherit;font-size:13px;font-weight:600;padding:8px 14px;border:0;border-radius:6px;cursor:pointer;background:var(--front);color:var(--ink)}
+
   .login-wrap{min-height:calc(100vh - 60px);display:flex;align-items:center;justify-content:center;padding:24px}
   .login-card{width:100%;max-width:340px;border:1px solid var(--rule);border-radius:10px;padding:28px 26px}
   .login-card h2{font-size:16px;margin:0 0 4px}
@@ -171,7 +188,34 @@
     <button id="prev">&larr; Prev</button>
     <button id="next">Next &rarr;</button>
   </div>
+
+  <div class="section-heading">Users</div>
+  <div class="filters">
+    <input id="u_q" placeholder="Search id, name, or email&hellip;">
+    <input id="u_city" placeholder="City">
+    <button id="u_search">Search</button>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>ID</th><th>Name</th><th>Email</th><th>City</th><th>Joined</th><th>Tier</th><th>Lifetime spend</th>
+    </tr></thead>
+    <tbody id="u_rows"></tbody>
+  </table>
+
+  <div class="pager">
+    <span id="u_pageInfo"></span>
+    <button id="u_prev">&larr; Prev</button>
+    <button id="u_next">Next &rarr;</button>
+  </div>
 </main>
+
+<div class="user-panel" id="userPanel">
+  <h2 id="u_panelName"></h2>
+  <div class="sub" id="u_panelId"></div>
+  <div id="u_panelBody"></div>
+  <button id="userPanelClose">Close</button>
+</div>
 
 <div class="overlay" id="overlay"></div>
 <div class="panel" id="panel">
@@ -300,6 +344,7 @@ async function openEditor(sku) {
 
 function closeEditor() {
   document.getElementById('panel').classList.remove('open');
+  document.getElementById('userPanel').classList.remove('open');
   document.getElementById('overlay').classList.remove('open');
   editingSku = null;
 }
@@ -352,6 +397,7 @@ function showAdminApp() {
   document.getElementById('logout').style.display = '';
   loadRows();
   loadKeys();
+  loadUsers();
 }
 
 function showLoginScreen(error) {
@@ -518,6 +564,115 @@ document.getElementById('k_rows').addEventListener('click', async e => {
     }
   }
 });
+
+// Users admin: read-only search + full 360 view. Same admin token as everything else above.
+let u_page = 1;
+const u_pageSize = 50;
+let u_total = 0;
+
+async function loadUsers() {
+  const params = new URLSearchParams({ page: String(u_page), pageSize: String(u_pageSize) });
+  const q = document.getElementById('u_q').value.trim();
+  const city = document.getElementById('u_city').value.trim();
+  if (q) params.set('q', q);
+  if (city) params.set('city', city);
+
+  const res = await fetch(`/admin/customers?${params}`, { headers: { 'x-admin-token': getToken() } });
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    document.getElementById('u_pageInfo').textContent = `Load failed: ${data.error ?? res.status}`;
+    return;
+  }
+  u_total = data.total ?? 0;
+  const tbody = document.getElementById('u_rows');
+  tbody.innerHTML = '';
+  for (const u of (data.results ?? [])) {
+    const tr = document.createElement('tr');
+    tr.className = 'row';
+    tr.innerHTML = `
+      <td>${escapeHtml(u.id)}</td>
+      <td>${escapeHtml(u.name)}</td>
+      <td class="muted">${escapeHtml(u.email)}</td>
+      <td class="muted">${escapeHtml(u.city)}</td>
+      <td class="muted">${escapeHtml((u.joined_at ?? '').slice(0, 10))}</td>
+      <td class="muted">${escapeHtml(u.tier ?? '—')}</td>
+      <td class="muted">£${Number(u.annual_spend_gbp ?? 0).toFixed(2)}</td>`;
+    tr.addEventListener('click', () => openUserPanel(u.id));
+    tbody.appendChild(tr);
+  }
+  const pages = Math.max(1, Math.ceil(u_total / u_pageSize));
+  document.getElementById('u_pageInfo').textContent = `Page ${u_page} of ${pages} (${u_total} users)`;
+  document.getElementById('u_prev').disabled = u_page <= 1;
+  document.getElementById('u_next').disabled = u_page >= pages;
+}
+
+document.getElementById('u_search').addEventListener('click', () => { u_page = 1; loadUsers(); });
+document.getElementById('u_prev').addEventListener('click', () => { if (u_page > 1) { u_page--; loadUsers(); } });
+document.getElementById('u_next').addEventListener('click', () => { u_page++; loadUsers(); });
+
+function kv(pairs) {
+  const rows = pairs.filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('');
+  return `<dl class="kv">${rows || '<dd class="empty">None</dd>'}</dl>`;
+}
+
+function activityList(items, render) {
+  if (!items || !items.length) return '<div class="empty">None</div>';
+  return `<ul class="activity-list">${items.map(i => `<li>${render(i)}</li>`).join('')}</ul>`;
+}
+
+async function openUserPanel(id) {
+  const res = await fetch(`/admin/customers/${encodeURIComponent(id)}`, { headers: { 'x-admin-token': getToken() } });
+  if (!res.ok) return;
+  const u = await res.json();
+  document.getElementById('u_panelName').textContent = u.identity?.name ?? id;
+  document.getElementById('u_panelId').textContent = `${u.identity?.id ?? id} · ${u.identity?.email ?? ''}`;
+
+  document.getElementById('u_panelBody').innerHTML = `
+    <h3>Identity &amp; consent</h3>
+    ${kv([
+      ['City', u.identity?.city], ['Joined', u.identity?.joined_at], ['Tenure (days)', u.identity?.tenure_days],
+      ['Shops for', u.identity?.shops_for], ['Height (cm)', u.identity?.height_cm], ['Weight (kg)', u.identity?.weight_kg],
+      ['Age', u.identity?.age], ['Seed persona', u.identity?.seed_persona],
+      ['Fit consent', u.consent?.fit_data ? 'yes' : 'no'], ['Marketing consent', u.consent?.marketing ? 'yes' : 'no'],
+    ])}
+
+    <h3>Loyalty &amp; subscription</h3>
+    ${kv([
+      ['Tier', u.loyalty?.tier], ['Points balance', u.loyalty?.points_balance], ['Lifetime points', u.loyalty?.lifetime_points],
+      ['Engagement score', u.loyalty?.engagement_score], ['Points to next tier', u.loyalty?.points_to_next_tier],
+      ['Sub tier', u.subscription?.tier], ['Sub price/mo', u.subscription?.price_gbp_month], ['Sub started', u.subscription?.started_at],
+    ])}
+
+    <h3>Transactions &amp; returns</h3>
+    ${kv([
+      ['Orders', u.transactions?.orders], ['Items', u.transactions?.items], ['Spend (GBP)', u.transactions?.spend_gbp],
+      ['Avg unit price', u.transactions?.avg_unit_price_gbp], ['Premium item share', u.transactions?.premium_item_share],
+      ['First order', u.transactions?.first_order], ['Last order', u.transactions?.last_order],
+      ['Returns total', u.returns?.total], ['Fit-related returns', u.returns?.fit_related], ['Return rate', u.returns?.rate],
+    ])}
+
+    <h3>Fit profiles</h3>
+    ${activityList(u.fit_profiles, f => `${escapeHtml(f.category)}: size ${escapeHtml(f.preferred_size)}, ${escapeHtml(f.fit_preference)} (${f.observations} obs, updated ${escapeHtml((f.updated_at ?? '').slice(0, 10))})`)}
+
+    <h3>Context store (cross-session memory)</h3>
+    ${activityList(u.context_store, c => `<strong>${escapeHtml(c.key)}</strong>: ${escapeHtml(c.value)}`)}
+
+    <h3>Recent orders</h3>
+    ${activityList(u.recent_orders, o => `${escapeHtml((o.placed_at ?? '').slice(0, 10))} · ${escapeHtml(o.channel)} · £${Number(o.total_gbp).toFixed(2)}`)}
+
+    <h3>Recent returns</h3>
+    ${activityList(u.recent_returns, r => `${escapeHtml((r.returned_at ?? '').slice(0, 10))} · ${escapeHtml(r.sku)} (${escapeHtml(r.size)}) · ${escapeHtml(r.reason_code)}`)}
+
+    <h3>Recent events</h3>
+    ${activityList(u.recent_events, e => `${escapeHtml((e.occurred_at ?? '').slice(0, 10))} · ${escapeHtml(e.type)}`)}
+  `;
+
+  document.getElementById('userPanel').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+
+document.getElementById('userPanelClose').addEventListener('click', closeEditor);
 </script>
 </body>
 </html>

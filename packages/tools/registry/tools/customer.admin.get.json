@@ -1,0 +1,11 @@
+{
+  "name": "customer.admin.get",
+  "version": "1.0.0",
+  "purpose": "Fetch one customer's full 360 record for admin review: identity, consent, loyalty, subscription, transactions, returns, fit profiles, context store, and recent activity.",
+  "allowed_agents": ["admin"],
+  "input_schema": {
+    "id": { "type": "string", "required": true }
+  },
+  "output_schema": { "identity": "object" },
+  "transport": { "service": "services", "method": "GET", "path": "/admin/customers/{id}/full" }
+}

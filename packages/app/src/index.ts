@@ -194,6 +194,27 @@ app.post('/admin/products/:sku', async c => {
   } catch (e) { return c.json({ error: String(e) }, 502); }
 });
 
+app.get('/admin/customers', async c => {
+  if (!(await adminAuthed(c))) return c.json({ error: 'unauthorized' }, 401);
+  const k = new Kernel('admin', new Trace(), c.env);
+  const args: Record<string, unknown> = {};
+  for (const key of ['q', 'city', 'page', 'pageSize']) {
+    const v = c.req.query(key);
+    if (v) args[key] = v;
+  }
+  try {
+    return c.json(await k.invoke('customer.admin.list', args));
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
+app.get('/admin/customers/:id', async c => {
+  if (!(await adminAuthed(c))) return c.json({ error: 'unauthorized' }, 401);
+  const k = new Kernel('admin', new Trace(), c.env);
+  try {
+    return c.json(await k.invoke('customer.admin.get', { id: c.req.param('id') }));
+  } catch (e) { return c.json({ error: String(e) }, 404); }
+});
+
 app.post('/admin/reindex', async c => {
   try {
     const qs = c.req.url.includes('?') ? '?' + c.req.url.split('?')[1] : '';

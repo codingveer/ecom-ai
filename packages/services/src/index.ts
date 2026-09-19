@@ -69,6 +69,92 @@ app.get('/customers/:id/profile', async c => {
   });
 });
 
+// ---------------------------------------------------------- Customer admin (read-only)
+app.get('/admin/customers', async c => {
+  const q = (c.req.query('q') ?? '').trim();
+  const city = c.req.query('city') || null;
+  const page = Math.max(1, Number(c.req.query('page') ?? 1));
+  const pageSize = Math.min(200, Math.max(1, Number(c.req.query('pageSize') ?? 50)));
+
+  const conditions: string[] = [];
+  const binds: string[] = [];
+  if (q) { conditions.push('(id LIKE ? OR name LIKE ? OR email LIKE ?)'); binds.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  if (city) { conditions.push('city = ?'); binds.push(city); }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const [count, rows] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT COUNT(*) n FROM customers ${where}`).bind(...binds),
+    c.env.DB.prepare(`
+      SELECT c.id, c.name, c.email, c.city, c.joined_at, l.tier, l.points_balance,
+             c.annual_spend_gbp
+      FROM customers c LEFT JOIN loyalty_accounts l ON l.customer_id = c.id
+      ${where} ORDER BY c.id LIMIT ? OFFSET ?`)
+      .bind(...binds, pageSize, (page - 1) * pageSize),
+  ]);
+
+  return c.json({ page, pageSize, total: Number((count.results?.[0] as any).n), results: rows.results });
+});
+
+app.get('/admin/customers/:id/full', async c => {
+  const id = c.req.param('id');
+  const [cust, loyalty, sub, tx, premium, rets, fitRets, fitProfiles, context, orders, returns, events] = await c.env.DB.batch([
+    c.env.DB.prepare(`SELECT * FROM customers WHERE id = ?`).bind(id),
+    c.env.DB.prepare(`SELECT * FROM loyalty_accounts WHERE customer_id = ?`).bind(id),
+    c.env.DB.prepare(`SELECT * FROM subscriptions WHERE customer_id = ?`).bind(id),
+    c.env.DB.prepare(`
+      SELECT COUNT(DISTINCT o.id) orders, COUNT(i.id) items,
+             COALESCE(SUM(i.price_gbp),0) spend, COALESCE(AVG(i.price_gbp),0) aup,
+             MIN(o.placed_at) first_order, MAX(o.placed_at) last_order
+      FROM orders o JOIN order_items i ON i.order_id = o.id WHERE o.customer_id = ?`).bind(id),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) n FROM order_items i JOIN products p ON p.sku = i.sku
+      WHERE i.customer_id = ? AND p.price_tier = 'premium'`).bind(id),
+    c.env.DB.prepare(`SELECT COUNT(*) n FROM returns WHERE customer_id = ?`).bind(id),
+    c.env.DB.prepare(`SELECT COUNT(*) n FROM returns WHERE customer_id = ? AND reason_code='size_fit'`).bind(id),
+    c.env.DB.prepare(`SELECT category, preferred_size, fit_preference, observations, updated_at FROM fit_profiles WHERE customer_id = ?`).bind(id),
+    c.env.DB.prepare(`SELECT key, value, updated_at FROM context_store WHERE customer_id = ? ORDER BY updated_at DESC`).bind(id),
+    c.env.DB.prepare(`SELECT id, placed_at, channel, total_gbp FROM orders WHERE customer_id = ? ORDER BY placed_at DESC LIMIT 20`).bind(id),
+    c.env.DB.prepare(`SELECT id, sku, size, returned_at, reason_code, reason_detail FROM returns WHERE customer_id = ? ORDER BY returned_at DESC LIMIT 20`).bind(id),
+    c.env.DB.prepare(`SELECT id, occurred_at, type, payload FROM events WHERE customer_id = ? ORDER BY occurred_at DESC LIMIT 20`).bind(id),
+  ]);
+
+  const cu = cust.results?.[0] as any;
+  if (!cu) return c.json({ error: 'customer_not_found' }, 404);
+  const t = (tx.results?.[0] ?? {}) as any;
+  const items = Number(t.items ?? 0);
+  const pn = Number((premium.results?.[0] as any)?.n ?? 0);
+  const rn = Number((rets.results?.[0] as any)?.n ?? 0);
+  const fn = Number((fitRets.results?.[0] as any)?.n ?? 0);
+
+  return c.json({
+    identity: {
+      id: cu.id, name: cu.name, email: cu.email, city: cu.city, joined_at: cu.joined_at,
+      tenure_days: Math.round((Date.now() - new Date(cu.joined_at).getTime()) / 864e5),
+      shops_for: cu.shops_for, height_cm: cu.height_cm, weight_kg: cu.weight_kg, age: cu.age,
+      seed_persona: cu.seed_persona,
+    },
+    consent: { fit_data: !!cu.consent_fit, marketing: !!cu.consent_marketing },
+    loyalty: loyalty.results?.[0] ?? null,
+    subscription: sub.results?.[0] ?? null,
+    transactions: {
+      orders: Number(t.orders ?? 0), items,
+      spend_gbp: r2(Number(t.spend ?? 0)), avg_unit_price_gbp: r2(Number(t.aup ?? 0)),
+      premium_item_share: items ? r2(pn / items) : 0,
+      first_order: t.first_order ?? null, last_order: t.last_order ?? null,
+    },
+    returns: { total: rn, fit_related: fn, rate: items ? Math.round((rn / items) * 1000) / 1000 : 0 },
+    declared: {
+      annual_spend_gbp: cu.annual_spend_gbp, avg_unit_price_gbp: cu.avg_unit_price_gbp,
+      premium_share: cu.premium_share,
+    },
+    fit_profiles: fitProfiles.results,
+    context_store: context.results,
+    recent_orders: orders.results,
+    recent_returns: returns.results,
+    recent_events: (events.results as any[]).map(e => ({ ...e, payload: JSON.parse(e.payload) })),
+  });
+});
+
 app.get('/customers/:id/orders', async c => {
   const { results } = await c.env.DB.prepare(`
     SELECT o.id, o.placed_at, o.channel, o.total_gbp,
@@ -133,6 +219,24 @@ function expandTerms(raw: string[]): string[] {
   return [...out];
 }
 
+// Word-boundary containment, not raw substring - a plain `includes` lets a term like
+// "men" match inside "women's" (brand text such as "DUKE WOMEN'S ...") and inflates
+// scores for the wrong department entirely. A trailing (')s/es is allowed on the hay
+// side only, so "short" still matches "Shorts" and "dress" still matches "Dresses" -
+// the boundary must hold at the *start* of the word, which is what actually rules out
+// "men" landing inside "women's".
+function hasWord(hay: string, term: string): boolean {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}('s|es|s)?\\b`).test(hay);
+}
+
+// Any positive score already means a genuine word-boundary hit somewhere (title,
+// category, or style tags) now that `hasWord` replaces raw substring matching - a
+// higher floor sounds safer but actually discards real single-word matches (e.g. a
+// query term that only lands in the title, worth 2, not the category, worth 3). The
+// floor stays at "some real match happened", not an arbitrary point total.
+const MIN_RELEVANCE = 1;
+
 async function lexicalSearch(env: Env, terms: string[], category: string | null, department: string | undefined, limit: number) {
   const conditions: string[] = [];
   const binds: string[] = [];
@@ -151,13 +255,13 @@ async function lexicalSearch(env: Env, terms: string[], category: string | null,
     const hay = `${r.title} ${r.category} ${r.style_tags} ${r.material} ${r.colour}`.toLowerCase();
     let score = 0;
     for (const t of terms) {
-      if (hay.includes(t)) score += 2;
+      if (hasWord(hay, t)) score += 2;
       if (String(r.category).toLowerCase().startsWith(t.replace(/e?s$/, ''))) score += 3;
-      if (String(r.style_tags).toLowerCase().includes(t)) score += 2;
+      if (hasWord(String(r.style_tags).toLowerCase(), t)) score += 2;
     }
-    if (terms.length === 0 || score > 0) score += Number(r.relevance_boost ?? 0);
+    if (terms.length === 0 || score >= MIN_RELEVANCE) score += Number(r.relevance_boost ?? 0);
     return { ...r, relevance: score };
-  }).filter(r => (terms.length === 0 ? true : r.relevance > 0) && r.stock > 0)
+  }).filter(r => (terms.length === 0 ? true : r.relevance >= MIN_RELEVANCE) && r.stock > 0)
     .sort((a, b) => b.relevance - a.relevance || b.rating - a.rating)
     .slice(0, limit);
 }
@@ -179,7 +283,13 @@ async function semanticSearch(env: Env, q: string, category: string | null, depa
     // at D1 hydration below instead, same as lexicalSearch does.
     filter: category ? { category } : undefined,
   });
-  const ids = matches.matches.map(m => m.id);
+  // Vectorize always returns its topK nearest neighbours, however distant - a query with
+  // nothing genuinely close in the index still gets back "matches" that are just the
+  // least-dissimilar vectors. Require a real similarity floor so an off-catalogue query
+  // (no vector match, similarity or otherwise) returns nothing rather than noise.
+  const MIN_SIMILARITY = 0.6;
+  const strong = matches.matches.filter(m => m.score >= MIN_SIMILARITY);
+  const ids = strong.map(m => m.id);
   if (!ids.length) return [];
 
   const conditions: string[] = [`p.sku IN (${ids.map(() => '?').join(',')})`];
@@ -193,7 +303,7 @@ async function semanticSearch(env: Env, q: string, category: string | null, depa
     FROM products p WHERE ${conditions.join(' AND ')}`).bind(...binds);
   const { results } = await stmt.all();
 
-  const scoreBySku = new Map(matches.matches.map(m => [m.id, m.score]));
+  const scoreBySku = new Map(strong.map(m => [m.id, m.score]));
   return (results as any[])
     .map(r => ({ ...r, relevance: r2((scoreBySku.get(r.sku) ?? 0) * 10 + Number(r.relevance_boost ?? 0)) }))
     .filter(r => r.stock > 0)

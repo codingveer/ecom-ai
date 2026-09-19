@@ -303,6 +303,68 @@ export const BUNDLED: ToolContract[] = [
     }
   },
   {
+    "name": "customer.admin.get",
+    "version": "1.0.0",
+    "purpose": "Fetch one customer's full 360 record for admin review: identity, consent, loyalty, subscription, transactions, returns, fit profiles, context store, and recent activity.",
+    "allowed_agents": [
+      "admin"
+    ],
+    "input_schema": {
+      "id": {
+        "type": "string",
+        "required": true
+      }
+    },
+    "output_schema": {
+      "identity": "object"
+    },
+    "transport": {
+      "service": "services",
+      "method": "GET",
+      "path": "/admin/customers/{id}/full"
+    }
+  },
+  {
+    "name": "customer.admin.list",
+    "version": "1.0.0",
+    "purpose": "List and search all customers for admin review, unfiltered.",
+    "allowed_agents": [
+      "admin"
+    ],
+    "input_schema": {
+      "q": {
+        "type": "string",
+        "required": false,
+        "description": "matches id, name, or email"
+      },
+      "city": {
+        "type": "string",
+        "required": false
+      },
+      "page": {
+        "type": "integer",
+        "required": false,
+        "default": 1
+      },
+      "pageSize": {
+        "type": "integer",
+        "required": false,
+        "default": 50
+      }
+    },
+    "output_schema": {
+      "page": "integer",
+      "pageSize": "integer",
+      "total": "integer",
+      "results": "array"
+    },
+    "transport": {
+      "service": "services",
+      "method": "GET",
+      "path": "/admin/customers"
+    }
+  },
+  {
     "name": "customer.events.get",
     "version": "1.0.0",
     "purpose": "Read recent behavioural / clickstream events for a customer.",
