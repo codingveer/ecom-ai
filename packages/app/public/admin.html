@@ -75,6 +75,8 @@
   .ai-keys-panel th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);padding:6px 8px;border-bottom:1px solid var(--rule)}
   .ai-keys-panel td{padding:6px 8px;border-bottom:1px solid var(--rule);vertical-align:middle}
   .ai-keys-panel code{font-size:11.5px;word-break:break-all}
+  .ai-keys-panel td.link-cell{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ai-keys-panel .share-link{background:var(--paper);border:1px solid var(--rule);border-radius:4px;padding:3px 6px;user-select:all}
   .ai-keys-panel .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
   .ai-keys-panel .status-dot.active{background:#1a7f37}
   .ai-keys-panel .status-dot.inactive{background:var(--mute)}
@@ -465,7 +467,7 @@ async function loadKeys() {
       tr.innerHTML = `
         <td><span class="status-dot ${k.active ? 'active' : 'inactive'}"></span>${k.active ? 'active' : 'inactive'}</td>
         <td><code>${escapeHtml(k.token)}</code></td>
-        <td><button class="small copy" data-link="${escapeHtml(link)}">Copy link</button></td>
+        <td class="link-cell"><code class="share-link">${escapeHtml(link)}</code><button class="small copy" data-link="${escapeHtml(link)}">Copy</button></td>
         <td class="muted">${escapeHtml(k.createdAt ?? '')}</td>
         <td><button class="small" data-token="${escapeHtml(k.token)}" data-active="${k.active ? '1' : '0'}">${k.active ? 'Deactivate' : 'Activate'}</button></td>`;
       tbody.appendChild(tr);
