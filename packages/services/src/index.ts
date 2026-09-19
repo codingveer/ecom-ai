@@ -191,7 +191,7 @@ app.post('/events', async c => {
 // ---------------------------------------------------------- Catalogue
 const STOP_WORDS = new Set([
   'i', 'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of',
-  'with', 'by', 'is', 'are', 'was', 'be', 'have', 'has', 'do', 'does', 'it', 'its',
+  'with', 'by', 'is', 'are', 'am', 'was', 'be', 'have', 'has', 'do', 'does', 'it', 'its',
   'this', 'that', 'some', 'need', 'want', 'get', 'me', 'my', 'we', 'our', 'you', 'your',
   'looking', 'find', 'show', 'me', 'please', 'something',
 ]);
@@ -252,7 +252,13 @@ const MIN_RELEVANCE = 1;
 // nothing genuinely close in the index still gets back "matches" that are just the
 // least-dissimilar vectors. Require a real similarity floor so an off-catalogue query
 // (no vector match, similarity or otherwise) contributes nothing rather than noise.
-const MIN_SIMILARITY = 0.72;
+// Calibrated empirically against this catalogue's embeddings, not a general constant:
+// gibberish and off-topic queries ("quantum physics homework help") top out around
+// 0.53-0.60 here, while genuine matches - even vague, style-based ones like "a weekend
+// brunch outfit that feels effortless" - start around 0.67. 0.64 sits in that gap with
+// margin on both sides; a fixed cutoff much higher (e.g. 0.72, tuned only against
+// concrete noun queries like "warm winter coat") wrongly excludes the vaguer-but-real ones.
+const MIN_SIMILARITY = 0.64;
 // Soft ceiling used only to normalise a lexical point-total onto the same 0-1 scale as
 // Vectorize's cosine similarity before blending the two in hybridSearch - not a cutoff.
 const LEXICAL_SCORE_CEILING = 10;
@@ -302,7 +308,10 @@ async function lexicalSearch(env: Env, rawTerms: string[], category: string | nu
   // (top/dress/trouser/skirt/jacket/knitwear) is meant to stand in for "anything apparel"
   // for a generic browse, not to smuggle a real category match past the literal-term gate
   // below. Every other synonym key still has to earn its match through an actual word hit.
-  const isWildcardBrowse = rawTerms.some(t => t === 'clothes' || t === 'clothing');
+  // Only a bare "clothes"/"clothing" query (nothing else descriptive left after stopword
+  // removal) counts as the wildcard browse - "warm clothes for winter" still has "warm" and
+  // "winter" that need to earn their own match, so the gate stays on for those terms.
+  const isWildcardBrowse = rawTerms.length > 0 && rawTerms.every(t => t === 'clothes' || t === 'clothing');
 
   return rows.map(r => {
     const { score, literalHit } = scoreLexical(r, rawTerms, expanded, isWildcardBrowse);
@@ -347,7 +356,10 @@ async function hybridSearch(env: Env, rawTerms: string[], q: string, category: s
   ]);
   const semanticBySku = new Map(vectorMatches.map(m => [m.id, m.score]));
   const expanded = expandTerms(rawTerms);
-  const isWildcardBrowse = rawTerms.some(t => t === 'clothes' || t === 'clothing');
+  // Only a bare "clothes"/"clothing" query (nothing else descriptive left after stopword
+  // removal) counts as the wildcard browse - "warm clothes for winter" still has "warm" and
+  // "winter" that need to earn their own match, so the gate stays on for those terms.
+  const isWildcardBrowse = rawTerms.length > 0 && rawTerms.every(t => t === 'clothes' || t === 'clothing');
 
   return rows.map(r => {
     const { score: lexicalScore, literalHit } = scoreLexical(r, rawTerms, expanded, isWildcardBrowse);
