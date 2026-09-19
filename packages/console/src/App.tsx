@@ -304,6 +304,10 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
               This session has used all {credits?.limit ?? ''} of its free turns. Ask an admin to raise the
               limit, or start a new session with a different persona.
             </p>
+            <p className="session-id-hint">
+              Session ID (an admin needs this to approve an increase on <code>/admin.html</code>):
+              <code>{sessionId}</code>
+            </p>
             <div className="modal-actions">
               <button className="ghost" onClick={() => setModalOpen(false)}>Close</button>
               <button

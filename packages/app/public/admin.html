@@ -52,6 +52,22 @@
   .status.warn{background:var(--warn-bg);color:#8A4B2A}
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.15);z-index:10;display:none}
   .overlay.open{display:block}
+
+  .credits-panel{border:1px solid var(--rule);border-radius:8px;padding:16px 18px;margin-bottom:24px;background:var(--front)}
+  .credits-panel h2{font-size:14px;margin:0 0 12px}
+  .credits-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
+  .credits-field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin-bottom:4px}
+  .credits-field input{font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--rule);border-radius:6px}
+  #c_sessionId{width:260px}
+  #c_token{width:220px}
+  #c_limit{width:100px}
+  .credits-row button{font:inherit;font-size:13px;font-weight:600;padding:7px 14px;border:0;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer}
+  .credits-row button:disabled{opacity:.4;cursor:default}
+  .credits-status{font-size:12.5px;margin-top:4px}
+  .credits-status .pill{display:inline-block;padding:2px 8px;border-radius:12px;font-weight:600;margin-right:8px}
+  .credits-status .pill.ok{background:#EAF6EC;color:#1a7f37}
+  .credits-status .pill.low{background:var(--warn-bg);color:#8A4B2A}
+  .credits-status .pill.requested{background:#FDECEC;color:#b3261e}
 </style>
 </head>
 <body>
@@ -60,6 +76,29 @@
   <a href="/shop.html">&larr; back to shop</a>
 </header>
 <main>
+  <div class="credits-panel">
+    <h2>Session credits — approve a turn-limit increase</h2>
+    <div class="credits-row">
+      <div class="credits-field">
+        <label>Session ID</label>
+        <input id="c_sessionId" placeholder="web-C001-1234567890">
+      </div>
+      <div class="credits-field">
+        <label>Admin token</label>
+        <input id="c_token" type="password" placeholder="x-admin-token">
+      </div>
+      <button id="c_lookup">Look up</button>
+    </div>
+    <div class="credits-row">
+      <div class="credits-field">
+        <label>New limit</label>
+        <input id="c_limit" type="number" min="0" step="1">
+      </div>
+      <button id="c_grant" disabled>Approve increase</button>
+    </div>
+    <div class="credits-status" id="c_status"></div>
+  </div>
+
   <div class="filters">
     <input id="q" placeholder="Search sku, title, or brand&hellip;">
     <select id="category"><option value="">All categories</option></select>
@@ -250,6 +289,62 @@ document.getElementById('save').addEventListener('click', async () => {
 });
 
 loadRows();
+
+// Session credits: admin token is remembered locally (never sent anywhere but the
+// x-admin-token header on the grant call below) so an admin doesn't retype it per lookup.
+const TOKEN_KEY = 'neutail-admin-token';
+const tokenInput = document.getElementById('c_token');
+try { tokenInput.value = localStorage.getItem(TOKEN_KEY) ?? ''; } catch { /* ignore */ }
+tokenInput.addEventListener('change', () => {
+  try { localStorage.setItem(TOKEN_KEY, tokenInput.value); } catch { /* ignore */ }
+});
+
+function setCreditsStatus(html, cls) {
+  const el = document.getElementById('c_status');
+  el.innerHTML = html;
+  el.className = 'credits-status' + (cls ? ' ' + cls : '');
+}
+
+document.getElementById('c_lookup').addEventListener('click', async () => {
+  const sessionId = document.getElementById('c_sessionId').value.trim();
+  document.getElementById('c_grant').disabled = true;
+  if (!sessionId) { setCreditsStatus('Enter a session ID first.'); return; }
+  setCreditsStatus('Looking up…');
+  try {
+    const res = await fetch(`/session/${encodeURIComponent(sessionId)}/credits`);
+    if (!res.ok) { setCreditsStatus(`Session not found (${res.status}).`); return; }
+    const d = await res.json();
+    const pillClass = d.used >= d.limit ? 'low' : 'ok';
+    const requestedBadge = d.requestedMore ? '<span class="pill requested">more requested</span>' : '';
+    setCreditsStatus(
+      `${requestedBadge}<span class="pill ${pillClass}">${d.used}/${d.limit} turns used</span>`,
+    );
+    document.getElementById('c_limit').value = d.limit;
+    document.getElementById('c_grant').disabled = false;
+  } catch (e) {
+    setCreditsStatus(`Lookup failed: ${e}`);
+  }
+});
+
+document.getElementById('c_grant').addEventListener('click', async () => {
+  const sessionId = document.getElementById('c_sessionId').value.trim();
+  const token = document.getElementById('c_token').value;
+  const limit = Number(document.getElementById('c_limit').value);
+  if (!sessionId || !Number.isFinite(limit) || limit < 0) { setCreditsStatus('Enter a valid session ID and limit.'); return; }
+  setCreditsStatus('Granting…');
+  try {
+    const res = await fetch(`/admin/sessions/${encodeURIComponent(sessionId)}/credits`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-admin-token': token },
+      body: JSON.stringify({ limit }),
+    });
+    const d = await res.json();
+    if (!res.ok || d.error) { setCreditsStatus(`Grant failed: ${d.error ?? res.status}`, 'low'); return; }
+    setCreditsStatus(`<span class="pill ok">Limit raised to ${d.limit}</span> — session can continue.`, 'ok');
+  } catch (e) {
+    setCreditsStatus(`Grant failed: ${e}`, 'low');
+  }
+});
 </script>
 </body>
 </html>

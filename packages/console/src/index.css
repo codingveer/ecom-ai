@@ -66,6 +66,8 @@ button.send:disabled{opacity:.45;cursor:default}
   box-shadow:0 20px 50px rgba(16,26,61,.25)}
 .modal h2{margin:0 0 8px;font-size:16px}
 .modal p{margin:0 0 18px;color:var(--mute);font-size:13.5px;line-height:1.55}
+.session-id-hint{display:flex;flex-direction:column;gap:4px}
+.session-id-hint code{background:var(--front);padding:4px 6px;border-radius:6px;font-size:12px;word-break:break-all;color:var(--ink)}
 .modal-actions{display:flex;gap:9px;justify-content:flex-end}
 .modal-actions button{border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer}
 .modal-actions .primary{border:0;background:var(--ink);color:#fff}
