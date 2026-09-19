@@ -20,6 +20,10 @@ import { PROMPTS, type Prompt } from './prompts.js';
 import { mockComplete } from './mock.js';
 import { render, ROUTING, callAnthropic, callOpenAI, callWorkersAI } from './providers.js';
 
+// Not in the default @cloudflare/workers-types entrypoint (only /experimental) - declared
+// locally rather than switching the whole project's types over for one binding shape.
+type SecretsStoreSecret = { get(): Promise<string> };
+
 type Env = {
   AI?: Ai;
   USAGE: DurableObjectNamespace;
@@ -27,12 +31,18 @@ type Env = {
   AI_GATEWAY_ACCOUNT_ID?: string;
   AI_GATEWAY_NAME?: string;
   ANTHROPIC_API_KEY?: string;
-  OPENAI_API_KEY?: string;
+  // Deployed: a Secrets Store binding (`.get()` returns the string). Local dev's
+  // .dev.vars has no such binding shape, so it stays a plain string there - see
+  // resolveOpenAIKey, which accepts either.
+  OPENAI_API_KEY?: string | SecretsStoreSecret;
   BRAINTRUST_API_KEY?: string;
   BRAINTRUST_PROJECT?: string;
 };
 
 const prompts = new Map(PROMPTS.map(p => [p.id, p]));
+
+const resolveOpenAIKey = async (env: Env) =>
+  typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY : (await env.OPENAI_API_KEY?.get()) ?? '';
 
 /** AI Gateway universal endpoint: one URL in front of every provider. */
 const gatewayBase = (env: Env) =>
@@ -86,7 +96,7 @@ app.post('/complete', async c => {
   const runProviderCall = async () => {
     if (provider === 'workers-ai' && !c.env.AI) throw new Error('AI binding not enabled');
     if (provider === 'anthropic') return await callAnthropic(c.env.ANTHROPIC_API_KEY ?? '', base, model, prompt.system, user);
-    else if (provider === 'openai') return await callOpenAI(c.env.OPENAI_API_KEY ?? '', base, model, prompt.system, user);
+    else if (provider === 'openai') return await callOpenAI(await resolveOpenAIKey(c.env), base, model, prompt.system, user);
     else if (provider === 'workers-ai') return await callWorkersAI(c.env.AI!, c.env.AI_GATEWAY_NAME ?? null, model, prompt.system, user);
     else return mockComplete(prompt_id, variables, prompt.system, user);
   };

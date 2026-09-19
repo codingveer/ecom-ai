@@ -17,12 +17,20 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["UsageCounter"] }
   ],
+  // OPENAI_API_KEY lives in the account's Secrets Store (dashboard: AI Gateway ->
+  // Provider Keys, or Secrets Store directly), not a per-Worker `wrangler secret put`
+  // value - it's a binding with a `.get()` method, not a plain string (see the Env
+  // type in src/index.ts). Not present locally: local dev keeps using .dev.vars'
+  // plain OPENAI_API_KEY string, which providers.ts's callOpenAI accepts either way.
+  "secrets_store_secrets": [
+    { "binding": "OPENAI_API_KEY", "store_id": "8f7a392f5caa4405b301782dcf461946", "secret_name": "OPEN_AI_API_KEY" }
+  ],
   "vars": {
     "LLM_PROVIDER": "mock",
     "AI_GATEWAY_NAME": "neutail",
+    "AI_GATEWAY_ACCOUNT_ID": "fbb4c97eeae5a6b70acfa473ff2f5459",
     "BRAINTRUST_PROJECT": "neutail"
-    // AI_GATEWAY_ACCOUNT_ID: set as a var or secret
-    // ANTHROPIC_API_KEY / OPENAI_API_KEY: wrangler secret put
+    // ANTHROPIC_API_KEY: wrangler secret put
     // BRAINTRUST_API_KEY: wrangler secret put (deployed); .dev.vars (local dev)
   },
   "workers_dev": false
