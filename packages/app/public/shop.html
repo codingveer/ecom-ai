@@ -41,14 +41,20 @@
   .search-row input{flex:1;border:0;outline:0;font:inherit;font-size:15px;padding:4px 0}
   .search-row button{border:0;background:none;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 
-  .semantic-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);margin-bottom:22px;cursor:pointer;user-select:none}
-  .semantic-toggle input{cursor:pointer}
+  .ai-toggle-row{display:flex;align-items:center;gap:8px;margin-bottom:22px}
+  .ai-toggle{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;user-select:none;padding:5px 10px;border:1.5px solid var(--accent);border-radius:20px;background:#fff;transition:background .15s,color .15s}
+  .ai-toggle input{display:none}
+  .ai-toggle.active{background:var(--accent);color:#fff}
+  .ai-dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.7}
 
-  .trending{margin-bottom:28px}
-  .trending .label{font-size:11px;color:var(--mute);margin-bottom:9px}
-  .chips{display:flex;flex-wrap:wrap;gap:16px 18px}
+  .trending{margin-bottom:16px}
+  .ai-suggestions{margin-bottom:28px}
+  .trending .label,.ai-suggestions .label{font-size:11px;color:var(--mute);margin-bottom:9px}
+  .chips{display:flex;flex-wrap:wrap;gap:10px 12px}
   .chip{border:0;background:none;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer;padding:0}
   .chip:hover{color:var(--accent)}
+  .ai-chip{border:1px solid var(--accent);background:none;font-size:12px;font-weight:500;color:var(--accent);cursor:pointer;padding:6px 12px;border-radius:16px;white-space:nowrap}
+  .ai-chip:hover{background:var(--accent);color:#fff}
 
   .section-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
   .section-head h2{font-size:12px;margin:0;margin-right:auto}
@@ -148,10 +154,16 @@
       <input type="text" id="search" placeholder="Search for anything..." autocomplete="off">
       <button id="searchBtn" class="caps">Search</button>
     </div>
-    <label class="semantic-toggle"><input type="checkbox" id="semanticToggle"> Semantic search <span class="muted">(embedding-based, understands meaning not just keywords)</span></label>
+    <div class="ai-toggle-row">
+      <label class="ai-toggle" id="aiToggleLabel"><input type="checkbox" id="semanticToggle"><span class="ai-dot"></span> AI mode</label>
+    </div>
     <div class="trending">
       <div class="label caps">Trending</div>
       <div class="chips" id="pills"></div>
+    </div>
+    <div class="ai-suggestions">
+      <div class="label caps">Try with AI mode</div>
+      <div class="chips" id="aiPills"></div>
     </div>
     <div id="resultsHead"></div>
     <div id="blurb"></div>
@@ -263,11 +275,34 @@ renderAuthArea();
 
 <script>
 const TRENDING = ['Occasion dress','Winter coat','Knit jumper','Work trousers','Trainers'];
+const AI_SUGGESTIONS = [
+  'I am looking for warm clothes this winter',
+  'Something elegant for a black tie event',
+  'Comfortable workwear for long days at the office',
+  'Layering pieces for unpredictable weather',
+  'Weekend brunch outfit that feels effortless',
+  'A gift for someone who loves fashion',
+];
 const CAT_ICON = { dresses:'👗', outerwear:'🧥', knitwear:'🧶', trousers:'👖', tops:'👕', skirts:'👗', footwear:'👟', accessories:'👜' };
 let lastProducts = [];
 
+function syncAiToggle(){
+  const checked = $('semanticToggle').checked;
+  $('aiToggleLabel').classList.toggle('active', checked);
+}
+$('semanticToggle').addEventListener('change', syncAiToggle);
+
 $('pills').innerHTML = TRENDING.map(c => `<button class="chip">${esc(c)}</button>`).join('');
-document.querySelectorAll('.chip').forEach(p => p.onclick = () => { $('search').value = p.textContent; runSearch(); });
+document.querySelectorAll('#pills .chip').forEach(p => p.onclick = () => { $('search').value = p.textContent; runSearch(); });
+
+$('aiPills').innerHTML = AI_SUGGESTIONS.map(s => `<button class="ai-chip">${esc(s)}</button>`).join('');
+document.querySelectorAll('#aiPills .ai-chip').forEach(p => p.onclick = () => {
+  $('search').value = p.textContent;
+  $('semanticToggle').checked = true;
+  syncAiToggle();
+  runSearch();
+});
+
 $('searchBtn').onclick = runSearch;
 $('search').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
 
