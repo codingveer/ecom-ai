@@ -1,19 +1,34 @@
 export {};
 /**
- * One-time (or per-reseed) indexing step: POSTs to the services Worker's
- * /catalogue/reindex, which embeds every product description via Workers AI and
- * upserts the vectors into the neutail-catalogue Vectorize index.
+ * Paginates through the remote /catalogue/reindex endpoint in pages of 100 so
+ * each request stays within Cloudflare Workers' subrequest limit.
  *
- * Requires npm run dev:services (or npm run dev) already running, and the Vectorize
- * index already created (see README.md's Deploying section, or Task 3 Step 1 of
- * docs/superpowers/plans/2026-09-17-semantic-search.md).
+ * Remote (deployed):  APP_URL=https://neutail-app.veereshk21.workers.dev npm run catalogue:reindex
+ * Local:              SERVICES_URL=http://localhost:8101 npm run catalogue:reindex
  */
-const SERVICES_URL = process.env.SERVICES_URL ?? 'http://localhost:8101';
+const SERVICES_URL = process.env.SERVICES_URL;
+const APP_URL      = process.env.APP_URL ?? 'http://localhost:8100';
+const PAGE_SIZE    = 100;
 
-const res = await fetch(`${SERVICES_URL}/catalogue/reindex`, { method: 'POST' });
-if (!res.ok) {
-  console.error(`reindex failed: ${res.status} ${await res.text()}`);
-  process.exit(1);
+function url(offset: number): string {
+  if (SERVICES_URL) return `${SERVICES_URL}/catalogue/reindex?offset=${offset}&limit=${PAGE_SIZE}`;
+  return `${APP_URL}/admin/reindex?offset=${offset}&limit=${PAGE_SIZE}`;
 }
-const body = await res.json() as { indexed: number };
-console.log(`Indexed ${body.indexed} products into Vectorize.`);
+
+let offset = 0;
+let total  = 0;
+
+while (true) {
+  const res = await fetch(url(offset), { method: 'POST' });
+  if (!res.ok) {
+    console.error(`reindex failed at offset ${offset}: ${res.status} ${await res.text()}`);
+    process.exit(1);
+  }
+  const body = await res.json() as { indexed: number; done: boolean };
+  total += body.indexed;
+  offset += PAGE_SIZE;
+  process.stdout.write(`\r  Indexed ${total} products...`);
+  if (body.done) break;
+}
+
+console.log(`\nDone — indexed ${total} products into Vectorize.`);

@@ -103,6 +103,36 @@ app.post('/events', async c => {
 });
 
 // ---------------------------------------------------------- Catalogue
+const STOP_WORDS = new Set([
+  'i', 'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of',
+  'with', 'by', 'is', 'are', 'was', 'be', 'have', 'has', 'do', 'does', 'it', 'its',
+  'this', 'that', 'some', 'need', 'want', 'get', 'me', 'my', 'we', 'our', 'you', 'your',
+  'looking', 'find', 'show', 'me', 'please', 'something',
+]);
+
+const SYNONYMS: Record<string, string[]> = {
+  warm: ['wool', 'knitwear', 'sweater', 'coat', 'jacket', 'thermal', 'fleece', 'outerwear'],
+  cosy: ['wool', 'knitwear', 'sweater', 'fleece'],
+  cozy: ['wool', 'knitwear', 'sweater', 'fleece'],
+  cold: ['coat', 'jacket', 'knitwear', 'thermal', 'outerwear'],
+  winter: ['coat', 'jacket', 'knitwear', 'thermal', 'outerwear'],
+  summer: ['linen', 'cotton', 'floral', 'light'],
+  smart: ['formal', 'workwear', 'office'],
+  casual: ['everyday', 'relaxed'],
+  office: ['workwear', 'formal', 'blazer', 'trouser'],
+  clothes: ['top', 'dress', 'trouser', 'skirt', 'jacket', 'knitwear'],
+  clothing: ['top', 'dress', 'trouser', 'skirt', 'jacket', 'knitwear'],
+};
+
+function expandTerms(raw: string[]): string[] {
+  const out = new Set(raw);
+  for (const t of raw) {
+    const syns = SYNONYMS[t];
+    if (syns) syns.forEach(s => out.add(s));
+  }
+  return [...out];
+}
+
 async function lexicalSearch(env: Env, terms: string[], category: string | null, department: string | undefined, limit: number) {
   const conditions: string[] = [];
   const binds: string[] = [];
@@ -177,7 +207,11 @@ app.get('/catalogue/search', async c => {
   // 'unisex' means "no department declared" - same as no filter at all.
   const department = c.req.query('department');
   const limit = Number(c.req.query('limit') ?? 40);
-  const terms = q.split(/\s+/).filter(Boolean);
+  // "t shirt" / "t-shirt" would otherwise split into ["t", "shirt"], dropping "t" (length ≤ 1)
+  // and matching every product with "shirt" in the title. Normalise to a single token first.
+  const normalizedQ = q.replace(/\bt[\s-]shirt/g, 't-shirt');
+  const rawTerms = normalizedQ.split(/\s+/).filter(t => t.length > 1 && !STOP_WORDS.has(t));
+  const terms = expandTerms(rawTerms);
   const searchMode = c.req.query('searchMode') === 'semantic' ? 'semantic' : 'lexical';
 
   if (searchMode === 'semantic') {
@@ -205,25 +239,32 @@ app.get('/catalogue/search', async c => {
 });
 
 app.post('/catalogue/reindex', async c => {
-  const { results } = await c.env.DB.prepare(`SELECT sku, category, description FROM products`).all();
-  const rows = results as { sku: string; category: string; description: string }[];
+  try {
+    const offset = Number(c.req.query('offset') ?? 0);
+    const limit  = Number(c.req.query('limit')  ?? 100);
 
-  const EMBED_BATCH = 20;
-  const UPSERT_BATCH = 200;
-  const toUpsert: VectorizeVector[] = [];
+    const { results } = await c.env.DB.prepare(
+      `SELECT sku, category, description FROM products LIMIT ? OFFSET ?`
+    ).bind(limit, offset).all();
+    const rows = results as { sku: string; category: string; description: string }[];
 
-  for (let i = 0; i < rows.length; i += EMBED_BATCH) {
-    const chunk = rows.slice(i, i + EMBED_BATCH);
-    const embedded = await c.env.AI.run(EMBED_MODEL as any, { text: chunk.map(r => r.description) }) as any;
-    const vectors: number[][] = embedded.data;
-    chunk.forEach((r, idx) => toUpsert.push({ id: r.sku, values: vectors[idx], metadata: { category: r.category } }));
+    if (!rows.length) return c.json({ indexed: 0, done: true });
+
+    const toUpsert: VectorizeVector[] = [];
+    const EMBED_BATCH = 100;
+    for (let i = 0; i < rows.length; i += EMBED_BATCH) {
+      const chunk = rows.slice(i, i + EMBED_BATCH);
+      const embedded = await c.env.AI.run(EMBED_MODEL as any, { text: chunk.map(r => r.description) }) as any;
+      const vectors: number[][] = embedded.data;
+      chunk.forEach((r, idx) => toUpsert.push({ id: r.sku, values: vectors[idx], metadata: { category: r.category } }));
+    }
+
+    await c.env.VECTORS.upsert(toUpsert);
+
+    return c.json({ indexed: toUpsert.length, offset, limit, done: rows.length < limit });
+  } catch (e) {
+    return c.json({ error: String(e), stack: e instanceof Error ? e.stack : undefined }, 500);
   }
-
-  for (let i = 0; i < toUpsert.length; i += UPSERT_BATCH) {
-    await c.env.VECTORS.upsert(toUpsert.slice(i, i + UPSERT_BATCH));
-  }
-
-  return c.json({ indexed: toUpsert.length });
 });
 
 app.get('/catalogue/trending/:category', async c => {

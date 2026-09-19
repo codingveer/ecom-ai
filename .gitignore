@@ -7,3 +7,4 @@ node_modules/
 # Added by Braintrust Wizard
 .env.braintrust
 .braintrust.json
+scripts/.classify-cache.json

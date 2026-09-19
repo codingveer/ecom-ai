@@ -19,23 +19,25 @@
     "deploy": "npm run build:console && wrangler deploy --config packages/services/wrangler.jsonc && wrangler deploy --config packages/tools/wrangler.jsonc && wrangler deploy --config packages/llm/wrangler.jsonc && wrangler deploy --config packages/app/wrangler.jsonc",
     "smoke": "tsx scripts/smoke.ts",
     "gen": "tsx scripts/gen-seed.ts && tsx scripts/gen-registry.ts && tsx scripts/gen-prompts.ts",
+    "classify": "tsx scripts/classify-catalog.ts",
     "catalogue:reindex": "tsx scripts/reindex-catalogue.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json && tsc -p tsconfig.evals.json && npm run typecheck --workspace @neutail/console",
     "eval": "braintrust eval evals"
   },
   "dependencies": {
-    "hono": "^4.13.7",
-    "agents": "^0.23.0",
     "@cloudflare/ai-chat": "^0.12.0",
+    "agents": "^0.23.0",
     "ai": "^7.0.106",
-    "hono-agents": "^3.0.12",
-    "braintrust": "^3.34.0"
+    "braintrust": "^3.34.0",
+    "hono": "^4.13.7",
+    "hono-agents": "^3.0.12"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260911.1",
     "@types/node": "^26.5.1",
     "autoevals": "^0.3.0",
     "concurrently": "^9.1.0",
+    "openai": "^6.49.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "wrangler": "^4.131.1"

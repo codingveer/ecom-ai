@@ -47,7 +47,7 @@ export async function rank(
     // Fit-aware: a size the customer wears must actually be in stock, or the SKU is down-weighted.
     const fitBoost = fitSize ? 0.6 : 0;
     const returnPenalty = p.return_rate * 1.2;
-    const score = relevance * 1.0 + tierW * 1.4 + p.rating * 0.35 + stockBoost + fitBoost - returnPenalty;
+    const score = relevance * 1.0 + tierW * 0.5 + p.rating * 0.35 + stockBoost + fitBoost - returnPenalty;
     return { ...p, score: Math.round(score * 100) / 100, tier_weight: tierW };
   }).sort((a, b) => b.score - a.score);
 

@@ -61,8 +61,12 @@ const MATERIAL_KEYWORDS = ['cotton', 'silk', 'polyester', 'rayon', 'leather', 'g
  * 'unisex' rather than a forced guess.
  */
 const WOMEN_ONLY_KEYWORDS = ['saree', 'kurti', 'kurta suit', 'blouse', 'lehenga', 'ghagra',
-  'salwar', 'churidar', 'dupatta', 'legging', "women's", 'womens'];
-const MEN_ONLY_KEYWORDS = ["men's garments", 'dhoti', 'nehru jacket', "men's"];
+  'salwar', 'churidar', 'dupatta', 'legging', "women's", 'womens',
+  // Unambiguous women's garments often absent from the raw category prefix:
+  'dress', 'gown', 'frock', 'playsuit', 'skirt'];
+const MEN_ONLY_KEYWORDS = ["men's garments", 'dhoti', 'nehru jacket', "men's",
+  // Men's traditional garment that appears in the dresses category rule:
+  'kurta pyjama'];
 
 /** Women checked before men everywhere below, so "women" text is never misread via a
  * careless `includes('men')` (the word "men" is a substring of "women"). */
@@ -71,12 +75,14 @@ function departmentFor(rawCategory: string, metaData: string, title: string): De
   if (cat.startsWith('women') || cat.includes('women_')) return 'women';
   if (cat.startsWith('men') || cat.includes('men_')) return 'men';
 
-  const text = `${metaData} ${title}`.toLowerCase();
+  // Include cat + title + metadata so "Floral Print A-line Dress" (cat="Dresses") is
+  // caught by the 'dress' keyword rather than falling through to 'unisex'.
+  const text = `${cat} ${metaData} ${title}`.toLowerCase();
   if (/\bfor women\b/.test(text)) return 'women';
   if (/\bfor men\b/.test(text)) return 'men';
 
-  if (WOMEN_ONLY_KEYWORDS.some(k => cat.includes(k))) return 'women';
-  if (MEN_ONLY_KEYWORDS.some(k => cat.includes(k))) return 'men';
+  if (WOMEN_ONLY_KEYWORDS.some(k => text.includes(k))) return 'women';
+  if (MEN_ONLY_KEYWORDS.some(k => text.includes(k))) return 'men';
 
   return 'unisex';
 }

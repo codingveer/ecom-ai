@@ -148,6 +148,15 @@ app.post('/invoke', async c => {
   }
 });
 
+app.post('/proxy/catalogue/reindex', async c => {
+  try {
+    const qs = c.req.url.includes('?') ? '?' + c.req.url.split('?')[1] : '';
+    const r = await c.env.SERVICES.fetch(`https://services.internal/catalogue/reindex${qs}`, { method: 'POST' });
+    const body = await r.text();
+    return new Response(body, { status: r.status, headers: { 'content-type': r.headers.get('content-type') ?? 'application/json' } });
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
 app.get('/health', async c => {
   const reg = await loadRegistry(c.env);
   return c.json({ ok: true, service: 'tool-gateway', tools: reg.size, store: 'workers-kv' });
