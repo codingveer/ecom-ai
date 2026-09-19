@@ -224,6 +224,61 @@ app.post('/admin/reindex', async c => {
   } catch (e) { return c.json({ error: String(e) }, 502); }
 });
 
+app.get('/', c => c.env.ASSETS.fetch(new Request(new URL('/index.html', c.req.url))));
+app.get('/shop', c => c.env.ASSETS.fetch(new Request(new URL('/index.html', c.req.url))));
+app.get('/home', c => c.env.ASSETS.fetch(new Request(new URL('/index.html', c.req.url))));
+app.get('/shop.html', c => c.env.ASSETS.fetch(new Request(new URL('/index.html', c.req.url))));
+app.get('/console', c => c.env.ASSETS.fetch(new Request(new URL('/console.html', c.req.url))));
+app.get('/console.html', c => c.env.ASSETS.fetch(new Request(new URL('/console.html', c.req.url))));
+
+app.get('/products', async c => {
+  const k = new Kernel('admin', new Trace(), c.env);
+  const args: Record<string, unknown> = {};
+  for (const key of ['q', 'category', 'department', 'page', 'pageSize']) {
+    const v = c.req.query(key);
+    if (v) args[key] = v;
+  }
+  try {
+    return c.json(await k.invoke('catalogue.admin.list', args));
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
+app.post('/api/checkout', async c => {
+  let body: any;
+  try { body = await c.req.json(); } catch { return c.json({ error: 'invalid_json' }, 400); }
+  const k = new Kernel('orchestrator', new Trace(), c.env);
+  try {
+    const result = await k.invoke('order.checkout', body);
+    return c.json(result);
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
+app.post('/api/consent', async c => {
+  let body: any;
+  try { body = await c.req.json(); } catch { return c.json({ error: 'invalid_json' }, 400); }
+  const k = new Kernel('orchestrator', new Trace(), c.env);
+  try {
+    const result = await k.invoke('customer.consent.update', body);
+    return c.json(result);
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
+app.get('/api/outfit/:sku', async c => {
+  const k = new Kernel('orchestrator', new Trace(), c.env);
+  try {
+    const result = await k.invoke('catalogue.outfit.get', { sku: c.req.param('sku') });
+    return c.json(result);
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
+app.get('/api/customers/:id/orders', async c => {
+  const k = new Kernel('orchestrator', new Trace(), c.env);
+  try {
+    const result = await k.invoke('customer.orders.get', { customer_id: c.req.param('id') });
+    return c.json(result);
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
 app.all('*', c => c.env.ASSETS.fetch(c.req.raw));
 
 export default app;

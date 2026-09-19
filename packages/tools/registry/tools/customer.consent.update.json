@@ -1,0 +1,30 @@
+{
+  "name": "customer.consent.update",
+  "version": "1.0.0",
+  "purpose": "Update fit consent for a customer.",
+  "allowed_agents": [
+    "admin",
+    "fit",
+    "orchestrator"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    },
+    "consent_fit": {
+      "type": "boolean",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "ok": "boolean",
+    "customer_id": "string",
+    "consent_fit": "boolean"
+  },
+  "transport": {
+    "service": "services",
+    "method": "POST",
+    "path": "/customers/{customer_id}/consent"
+  }
+}

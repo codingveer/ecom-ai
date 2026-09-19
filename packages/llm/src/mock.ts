@@ -26,10 +26,10 @@ const DISCOVERY_ITEM_RE = /\b(dress|coat|jumper|trousers|shirt|skirt|shoes)\b/i;
 const CONTINUATION_RE = /^(what about|and|how about|in |the )/i;
 
 const CATEGORY_RULES: Array<[RegExp, string]> = [
-  [/\bdress(es)?\b/i, 'dresses'], [/\b(coat|jacket|outerwear)\b/i, 'outerwear'],
-  [/\b(jumper|knit|sweater|cardigan)\b/i, 'knitwear'], [/\b(trouser|chino|jean)/i, 'trousers'],
-  [/\b(top|shirt|blouse|tee)\b/i, 'tops'], [/\bskirt/i, 'skirts'],
-  [/\b(shoe|boot|trainer|heel)/i, 'footwear'], [/\b(bag|scarf|belt|accessor)/i, 'accessories'],
+  [/\bdress(es)?\b/i, 'dresses'], [/\b(coat|jacket|outerwear)s?\b/i, 'outerwear'],
+  [/\b(jumper|knit|sweater|cardigan)s?\b/i, 'knitwear'], [/\b(trouser|chino|jean)s?\b/i, 'trousers'],
+  [/\b(top|shirt|blouse|tee)s?\b/i, 'tops'], [/\bskirts?\b/i, 'skirts'],
+  [/\b(shoe|boot|trainer|heel)s?\b/i, 'footwear'], [/\b(bag|scarf|belt|accessor|accessorie)s?\b/i, 'accessories'],
 ];
 
 export function mockComplete(promptId: string, vars: Record<string, any>, system: string, user: string) {

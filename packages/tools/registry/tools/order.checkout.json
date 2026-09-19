@@ -1,0 +1,47 @@
+{
+  "name": "order.checkout",
+  "version": "1.0.0",
+  "purpose": "Execute checkout: record order, items, deduct inventory, accrue loyalty points, and update fit profiles.",
+  "allowed_agents": [
+    "orchestrator",
+    "admin",
+    "loyalty"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    },
+    "items": {
+      "type": "array",
+      "required": true
+    },
+    "total_gbp": {
+      "type": "number",
+      "required": true
+    },
+    "points_redeemed": {
+      "type": "integer",
+      "required": false,
+      "default": 0
+    },
+    "channel": {
+      "type": "string",
+      "required": false,
+      "default": "web_atelier"
+    }
+  },
+  "output_schema": {
+    "ok": "boolean",
+    "order_id": "string",
+    "placed_at": "string",
+    "total_gbp": "number",
+    "items": "array",
+    "loyalty": "object"
+  },
+  "transport": {
+    "service": "services",
+    "method": "POST",
+    "path": "/orders/checkout"
+  }
+}

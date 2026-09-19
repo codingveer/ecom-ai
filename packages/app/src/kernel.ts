@@ -47,7 +47,13 @@ export class Kernel {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ agent: this.agent, tool, args }),
     }));
-    const body = await r.json<any>();
+    let body: any;
+    try {
+      body = await r.json<any>();
+    } catch {
+      const txt = await r.text().catch(() => '');
+      throw new Error(`tool gateway unreachable or failed (${r.status}): ${txt || 'non-JSON response'}`);
+    }
     this.trace.add({
       stage: 'tool', actor: this.agent, label: `${tool}@${body.version ?? '?'}`,
       detail: { args, ok: body.ok, error: body.error ?? null },
@@ -66,7 +72,13 @@ export class Kernel {
         ...(this.opts.liveAI ? { provider_override: 'openai' } : {}),
       }),
     }));
-    const body = await r.json<any>();
+    let body: any;
+    try {
+      body = await r.json<any>();
+    } catch {
+      const txt = await r.text().catch(() => '');
+      throw new Error(`llm gateway unreachable or failed (${r.status}): ${txt || 'non-JSON response'}`);
+    }
     if (!body.ok) throw new Error(`llm ${prompt_id} failed`);
     this.trace.add({
       stage: 'llm', actor: this.agent, label: `${prompt_id}@${body.meta.prompt_version}`,

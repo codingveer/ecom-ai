@@ -79,6 +79,15 @@ const AI_KEY = resolveAiKey();
  */
 function loadInitialSession(): { customerId: string; sessionId: string } {
   try {
+    const url = new URL(window.location.href);
+    const paramCid = url.searchParams.get('customerId');
+    if (paramCid && ['C001', 'C002', 'C003', 'C004'].includes(paramCid)) {
+      const fresh = { customerId: paramCid, sessionId: newSessionId(paramCid) };
+      try { sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(fresh)); } catch { /* ignore */ }
+      return fresh;
+    }
+  } catch { /* ignore */ }
+  try {
     const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch { /* ignore - storage unavailable or corrupt, fall through to a fresh session */ }
@@ -190,6 +199,31 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
     sendMessage({ text });
     setInput('');
   }
+
+  // Support initial prompt from URL parameter
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const initialPrompt = url.searchParams.get('prompt');
+      if (initialPrompt && messages.length === 0 && status === 'ready') {
+        send(initialPrompt);
+        url.searchParams.delete('prompt');
+        window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+      }
+    } catch { /* ignore */ }
+  }, [status, messages.length]);
+
+  // Support postMessage from parent window
+  useEffect(() => {
+    function handlePostMessage(event: MessageEvent) {
+      if (!event.data || typeof event.data !== 'object') return;
+      if (event.data.type === 'NEUTAIL_SEND_PROMPT' && event.data.text) {
+        send(event.data.text);
+      }
+    }
+    window.addEventListener('message', handlePostMessage);
+    return () => window.removeEventListener('message', handlePostMessage);
+  }, []);
 
   const totals = useMemo(() => {
     const t = { tools: 0, llm: 0, tokens: 0, policy: 0 };
@@ -359,6 +393,18 @@ export default function App() {
     try { sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ customerId: id, sessionId: fresh })); } catch { /* ignore */ }
   }
 
+  useEffect(() => {
+    function handleCustomerMessage(event: MessageEvent) {
+      if (event.data && typeof event.data === 'object') {
+        if (event.data.type === 'NEUTAIL_SWITCH_CUSTOMER' && event.data.customerId) {
+          switchCustomer(event.data.customerId);
+        }
+      }
+    }
+    window.addEventListener('message', handleCustomerMessage);
+    return () => window.removeEventListener('message', handleCustomerMessage);
+  }, []);
+
   return (
     <>
       <header>
@@ -379,8 +425,8 @@ export default function App() {
             </button>
           ))}
         </div>
-        <a href="/shop.html" style={{ fontSize: 12.5, color: 'var(--violet)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
-          View storefront mockup →
+        <a href="/" style={{ fontSize: 12.5, color: 'var(--violet)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          View Storefront →
         </a>
       </header>
 

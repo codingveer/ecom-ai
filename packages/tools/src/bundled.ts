@@ -171,6 +171,32 @@ export const BUNDLED: ToolContract[] = [
     }
   },
   {
+    "name": "catalogue.outfit.get",
+    "version": "1.0.0",
+    "purpose": "Fetch curated outfit styling pairings for a SKU.",
+    "allowed_agents": [
+      "admin",
+      "discovery",
+      "orchestrator"
+    ],
+    "input_schema": {
+      "sku": {
+        "type": "string",
+        "required": true
+      }
+    },
+    "output_schema": {
+      "target": "object",
+      "outfit": "array",
+      "styling_rationale": "string"
+    },
+    "transport": {
+      "service": "services",
+      "method": "GET",
+      "path": "/catalogue/{sku}/outfit"
+    }
+  },
+  {
     "name": "catalogue.product.get",
     "version": "1.0.0",
     "purpose": "Fetch a single product record by SKU.",
@@ -365,6 +391,36 @@ export const BUNDLED: ToolContract[] = [
     }
   },
   {
+    "name": "customer.consent.update",
+    "version": "1.0.0",
+    "purpose": "Update fit consent for a customer.",
+    "allowed_agents": [
+      "admin",
+      "fit",
+      "orchestrator"
+    ],
+    "input_schema": {
+      "customer_id": {
+        "type": "string",
+        "required": true
+      },
+      "consent_fit": {
+        "type": "boolean",
+        "required": true
+      }
+    },
+    "output_schema": {
+      "ok": "boolean",
+      "customer_id": "string",
+      "consent_fit": "boolean"
+    },
+    "transport": {
+      "service": "services",
+      "method": "POST",
+      "path": "/customers/{customer_id}/consent"
+    }
+  },
+  {
     "name": "customer.events.get",
     "version": "1.0.0",
     "purpose": "Read recent behavioural / clickstream events for a customer.",
@@ -390,6 +446,30 @@ export const BUNDLED: ToolContract[] = [
       "service": "services",
       "method": "GET",
       "path": "/customers/{customer_id}/events"
+    }
+  },
+  {
+    "name": "customer.orders.get",
+    "version": "1.0.0",
+    "purpose": "Fetch recent orders for a customer.",
+    "allowed_agents": [
+      "orchestrator",
+      "admin",
+      "loyalty"
+    ],
+    "input_schema": {
+      "customer_id": {
+        "type": "string",
+        "required": true
+      }
+    },
+    "output_schema": {
+      "orders": "array"
+    },
+    "transport": {
+      "service": "services",
+      "method": "GET",
+      "path": "/customers/{customer_id}/orders"
     }
   },
   {
@@ -612,6 +692,53 @@ export const BUNDLED: ToolContract[] = [
       "service": "services",
       "method": "POST",
       "path": "/loyalty/{customer_id}/redeem"
+    }
+  },
+  {
+    "name": "order.checkout",
+    "version": "1.0.0",
+    "purpose": "Execute checkout: record order, items, deduct inventory, accrue loyalty points, and update fit profiles.",
+    "allowed_agents": [
+      "orchestrator",
+      "admin",
+      "loyalty"
+    ],
+    "input_schema": {
+      "customer_id": {
+        "type": "string",
+        "required": true
+      },
+      "items": {
+        "type": "array",
+        "required": true
+      },
+      "total_gbp": {
+        "type": "number",
+        "required": true
+      },
+      "points_redeemed": {
+        "type": "integer",
+        "required": false,
+        "default": 0
+      },
+      "channel": {
+        "type": "string",
+        "required": false,
+        "default": "web_atelier"
+      }
+    },
+    "output_schema": {
+      "ok": "boolean",
+      "order_id": "string",
+      "placed_at": "string",
+      "total_gbp": "number",
+      "items": "array",
+      "loyalty": "object"
+    },
+    "transport": {
+      "service": "services",
+      "method": "POST",
+      "path": "/orders/checkout"
     }
   },
   {

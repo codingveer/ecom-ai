@@ -1,0 +1,24 @@
+{
+  "name": "customer.orders.get",
+  "version": "1.0.0",
+  "purpose": "Fetch recent orders for a customer.",
+  "allowed_agents": [
+    "orchestrator",
+    "admin",
+    "loyalty"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "orders": "array"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/customers/{customer_id}/orders"
+  }
+}

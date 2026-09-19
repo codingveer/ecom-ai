@@ -12,5 +12,10 @@ export default defineConfig({
   build: {
     outDir: '../app/public',
     emptyOutDir: false,
+    rollupOptions: {
+      input: {
+        console: './console.html',
+      },
+    },
   },
 });

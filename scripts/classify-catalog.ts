@@ -195,9 +195,9 @@ const PROMPT = (title: string) =>
   `  "description": "2 sentence marketing description"\n` +
   `}\n\n` +
   `Rules:\n` +
-  `- department "women": dresses, skirts, sarees, lehengas, blouses, kurtas/kurtis, salwar suits, gowns, frocks — anything clearly womenswear\n` +
-  `- department "men": shirts, trousers, suits, kurta-pyjama, dhotis — anything clearly menswear\n` +
-  `- department "unisex": ONLY truly gender-neutral items — sneakers, athletic/sport shoes, bags, wallets, watches, belts, scarves, caps, jewellery. Ballet flats, heels, stilettos, pumps, kitten heels → "women". Chelsea boots, brogues without a heeled feminine form → may be unisex if visibly ungendered.\n` +
+  `- department "women": dresses, skirts, sarees, lehengas, blouses, kurtas/kurtis, salwar suits, gowns, frocks, women's tops/t-shirts/tanks, women's jewellery (earrings, necklaces, chokers, anklets, nosepins, bangles, rings), hair accessories (hair clips, hair bands, headbands, scrunchies, hair ties), handbags, totes, clutches, sling bags, shoulder bags, dupattas, shawls, stoles, tights, heels, flats, pumps — anything feminine or modeled on female figures\n` +
+  `- department "men": shirts, trousers, suits, kurta-pyjama, dhotis, men's garments — anything clearly menswear\n` +
+  `- department "unisex": ONLY truly gender-neutral items — sneakers, running/athletic shoes, backpacks, watches, belts, sunglasses, socks, caps/beanies, traditional unisex rakhis. If an accessory is jewellery, a handbag/purse, or hair styling, classify it as "women".\n` +
   `- category "knitwear": sweaters, cardigans, jumpers, pullovers, knit tops — worn as a mid-layer\n` +
   `- category "outerwear": jackets, coats, blazers, rainwear — worn OVER other clothing as the outermost layer\n` +
   `- category: pick the single best match\n` +

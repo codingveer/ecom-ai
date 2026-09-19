@@ -69,6 +69,14 @@ app.get('/customers/:id/profile', async c => {
   });
 });
 
+app.post('/customers/:id/consent', async c => {
+  const id = c.req.param('id');
+  const body = await c.req.json<any>().catch(() => ({}));
+  const consentFit = body.consent_fit ? 1 : 0;
+  await c.env.DB.prepare(`UPDATE customers SET consent_fit = ? WHERE id = ?`).bind(consentFit, id).run();
+  return c.json({ ok: true, customer_id: id, consent_fit: !!consentFit });
+});
+
 // ---------------------------------------------------------- Customer admin (read-only)
 app.get('/admin/customers', async c => {
   const q = (c.req.query('q') ?? '').trim();
@@ -162,6 +170,120 @@ app.get('/customers/:id/orders', async c => {
     FROM orders o WHERE o.customer_id = ? ORDER BY o.placed_at DESC LIMIT ?`)
     .bind(c.req.param('id'), Number(c.req.query('limit') ?? 20)).all();
   return c.json(results);
+});
+
+app.post('/orders/checkout', async c => {
+  let body: any;
+  try { body = await c.req.json(); } catch { return c.json({ error: 'invalid_json' }, 400); }
+  const { customer_id, items = [], total_gbp, points_redeemed = 0, channel = 'web_atelier' } = body;
+  if (!customer_id || !Array.isArray(items) || items.length === 0) {
+    return c.json({ error: 'customer_id and non-empty items array are required' }, 400);
+  }
+
+  const placedAt = nowIso();
+  const orderId = `ORD-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const finalTotal = Math.max(0, Number(total_gbp) || 0);
+
+  // 1. Insert Order
+  await c.env.DB.prepare(`
+    INSERT INTO orders (id, customer_id, placed_at, channel, total_gbp)
+    VALUES (?, ?, ?, ?, ?)
+  `).bind(orderId, customer_id, placedAt, channel, finalTotal).run();
+
+  // 2. Insert Order Items & Update Inventory & Fit Observations
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx];
+    const itemId = `ITM-${orderId.slice(4)}-${idx + 1}`;
+    const qty = Math.max(1, Number(item.qty) || 1);
+    const price = Number(item.price_gbp) || 0;
+
+    await c.env.DB.prepare(`
+      INSERT INTO order_items (id, order_id, customer_id, sku, size, qty, price_gbp)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(itemId, orderId, customer_id, item.sku, item.size || 'M', qty, price).run();
+
+    if (item.sku && item.size) {
+      await c.env.DB.prepare(`
+        UPDATE inventory SET qty = MAX(0, qty - ?) WHERE sku = ? AND size = ?
+      `).bind(qty, item.sku, item.size).run();
+    }
+
+    if (item.category && item.size) {
+      const existing = await c.env.DB.prepare(`
+        SELECT observations FROM fit_profiles WHERE customer_id = ? AND category = ?
+      `).bind(customer_id, item.category).first<{ observations: number }>();
+      if (existing) {
+        await c.env.DB.prepare(`
+          UPDATE fit_profiles SET observations = observations + 1, preferred_size = ?, updated_at = ?
+          WHERE customer_id = ? AND category = ?
+        `).bind(item.size, placedAt, customer_id, item.category).run();
+      } else {
+        await c.env.DB.prepare(`
+          INSERT INTO fit_profiles (customer_id, category, preferred_size, fit_preference, observations, updated_at)
+          VALUES (?, ?, ?, ?, 1, ?)
+        `).bind(customer_id, item.category, item.size, item.fit_preference || 'regular', placedAt).run();
+      }
+    }
+  }
+
+  // 3. Loyalty Points Accrual & Redemption
+  const sub = await c.env.DB.prepare(`SELECT tier FROM subscriptions WHERE customer_id = ?`).bind(customer_id).first<{ tier: string }>();
+  const multiplier = sub?.tier && sub.tier !== 'free' ? 2 : 1;
+  const basePoints = Math.round(finalTotal);
+  const awardedPoints = Math.round(basePoints * multiplier);
+
+  let loyaltyAccount = await c.env.DB.prepare(`SELECT * FROM loyalty_accounts WHERE customer_id = ?`).bind(customer_id).first<any>();
+  if (!loyaltyAccount) {
+    loyaltyAccount = {
+      customer_id, tier: 'Bronze', points_balance: 0, lifetime_points: 0,
+      engagement_score: 0.5, points_to_next_tier: 1500,
+    };
+    await c.env.DB.prepare(`
+      INSERT INTO loyalty_accounts (customer_id, tier, points_balance, lifetime_points, engagement_score, points_to_next_tier)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(customer_id, 'Bronze', 0, 0, 0.5, 1500).run();
+  }
+
+  const redeemed = Math.min(loyaltyAccount.points_balance, Math.max(0, Number(points_redeemed) || 0));
+  const newBalance = loyaltyAccount.points_balance - redeemed + awardedPoints;
+  const lifetime = loyaltyAccount.lifetime_points + awardedPoints;
+  const newTier = lifetime > 9000 ? 'Platinum' : lifetime > 4500 ? 'Gold' : lifetime > 1500 ? 'Silver' : 'Bronze';
+  const nextTarget = newTier === 'Platinum' ? lifetime : newTier === 'Gold' ? 9000 : newTier === 'Silver' ? 4500 : 1500;
+  const pointsToNext = Math.max(0, nextTarget - lifetime);
+  const newEngagement = Math.min(1, loyaltyAccount.engagement_score + 0.05);
+
+  await c.env.DB.prepare(`
+    UPDATE loyalty_accounts
+    SET points_balance = ?, lifetime_points = ?, tier = ?, points_to_next_tier = ?, engagement_score = ?
+    WHERE customer_id = ?
+  `).bind(newBalance, lifetime, newTier, pointsToNext, newEngagement, customer_id).run();
+
+  // 4. Record event
+  const eventId = `EV-ORD-${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
+  await c.env.DB.prepare(`
+    INSERT INTO events (id, customer_id, occurred_at, type, payload)
+    VALUES (?, ?, ?, ?, ?)
+  `).bind(eventId, customer_id, placedAt, 'order_placed', JSON.stringify({
+    order_id: orderId, total_gbp: finalTotal, items_count: items.length,
+    awarded_points: awardedPoints, redeemed_points: redeemed, new_tier: newTier,
+  })).run();
+
+  return c.json({
+    ok: true,
+    order_id: orderId,
+    placed_at: placedAt,
+    total_gbp: finalTotal,
+    items,
+    loyalty: {
+      points_awarded: awardedPoints,
+      points_redeemed: redeemed,
+      balance: newBalance,
+      tier: newTier,
+      multiplier,
+      tier_upgraded: newTier !== loyaltyAccount.tier,
+      points_to_next_tier: pointsToNext,
+    },
+  });
 });
 
 app.get('/customers/:id/returns', async c => {
@@ -465,6 +587,34 @@ app.get('/catalogue/trending/:category', async c => {
 app.get('/catalogue/:sku', async c => {
   const row = await c.env.DB.prepare(`SELECT * FROM products WHERE sku = ?`).bind(c.req.param('sku')).first();
   return row ? c.json(row) : c.json({ error: 'sku_not_found' }, 404);
+});
+
+app.get('/catalogue/:sku/outfit', async c => {
+  const sku = c.req.param('sku');
+  const target = await c.env.DB.prepare(`SELECT * FROM products WHERE sku = ?`).bind(sku).first<any>();
+  if (!target) return c.json({ error: 'sku_not_found' }, 404);
+
+  const cat = target.category;
+  let pairCats: string[] = [];
+  if (cat === 'dresses') pairCats = ['footwear', 'accessories'];
+  else if (cat === 'outerwear') pairCats = ['tops', 'trousers'];
+  else if (cat === 'knitwear' || cat === 'tops') pairCats = ['trousers', 'accessories'];
+  else if (cat === 'trousers' || cat === 'skirts') pairCats = ['tops', 'footwear'];
+  else pairCats = ['dresses', 'outerwear'];
+
+  const pairedProducts: any[] = [];
+  for (const pc of pairCats) {
+    const p = await c.env.DB.prepare(`
+      SELECT * FROM products WHERE category = ? AND sku != ? ORDER BY rating DESC, return_rate ASC LIMIT 1
+    `).bind(pc, sku).first<any>();
+    if (p) pairedProducts.push(p);
+  }
+
+  return c.json({
+    target,
+    outfit: pairedProducts,
+    styling_rationale: `Curated outfit designed to complement ${target.title}. Harmonies chosen based on palette tonality, silhouette proportion, and hand-finished fabrication.`,
+  });
 });
 
 // ---------------------------------------------------------- Catalogue admin (tagging)

@@ -1,0 +1,26 @@
+{
+  "name": "catalogue.outfit.get",
+  "version": "1.0.0",
+  "purpose": "Fetch curated outfit styling pairings for a SKU.",
+  "allowed_agents": [
+    "admin",
+    "discovery",
+    "orchestrator"
+  ],
+  "input_schema": {
+    "sku": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "target": "object",
+    "outfit": "array",
+    "styling_rationale": "string"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/catalogue/{sku}/outfit"
+  }
+}
