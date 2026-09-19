@@ -248,8 +248,38 @@ function hasWord(hay: string, term: string): boolean {
 // query term that only lands in the title, worth 2, not the category, worth 3). The
 // floor stays at "some real match happened", not an arbitrary point total.
 const MIN_RELEVANCE = 1;
+// Vectorize always returns its topK nearest neighbours, however distant - a query with
+// nothing genuinely close in the index still gets back "matches" that are just the
+// least-dissimilar vectors. Require a real similarity floor so an off-catalogue query
+// (no vector match, similarity or otherwise) contributes nothing rather than noise.
+const MIN_SIMILARITY = 0.72;
+// Soft ceiling used only to normalise a lexical point-total onto the same 0-1 scale as
+// Vectorize's cosine similarity before blending the two in hybridSearch - not a cutoff.
+const LEXICAL_SCORE_CEILING = 10;
 
-async function lexicalSearch(env: Env, rawTerms: string[], category: string | null, department: string | undefined, limit: number) {
+function scoreLexical(r: any, rawTerms: string[], expanded: string[], isWildcardBrowse: boolean) {
+  const hay = `${r.title} ${r.category} ${r.style_tags} ${r.material} ${r.colour}`.toLowerCase();
+  const styleTags = String(r.style_tags).toLowerCase();
+  let score = 0;
+  // A generic synonym expansion (e.g. "warm" -> coat/jacket/knitwear) matches broad swaths
+  // of the catalogue on its own - useful for boosting a product that's already relevant,
+  // but it can't be what makes a product relevant in the first place. Require at least one
+  // hit that traces back to a word the customer actually typed (unless this is the
+  // deliberate "clothes" wildcard browse - see isWildcardBrowse below).
+  let literalHit = rawTerms.length === 0 || isWildcardBrowse;
+  for (const t of expanded) {
+    const hayHit = hasWord(hay, t);
+    const catHit = String(r.category).toLowerCase().startsWith(t.replace(/e?s$/, ''));
+    const tagHit = hasWord(styleTags, t);
+    if (hayHit) score += 2;
+    if (catHit) score += 3;
+    if (tagHit) score += 2;
+    if ((hayHit || catHit || tagHit) && rawTerms.includes(t)) literalHit = true;
+  }
+  return { score, literalHit };
+}
+
+async function fetchCandidateRows(env: Env, category: string | null, department: string | undefined) {
   const conditions: string[] = [];
   const binds: string[] = [];
   if (category) { conditions.push('p.category = ?'); binds.push(category); }
@@ -262,7 +292,11 @@ async function lexicalSearch(env: Env, rawTerms: string[], category: string | nu
     SELECT p.*, COALESCE((SELECT SUM(qty) FROM inventory v WHERE v.sku = p.sku),0) stock
     FROM products p ${where}`).bind(...binds);
   const { results } = await stmt.all();
+  return results as any[];
+}
 
+async function lexicalSearch(env: Env, rawTerms: string[], category: string | null, department: string | undefined, limit: number) {
+  const rows = await fetchCandidateRows(env, category, department);
   const expanded = expandTerms(rawTerms);
   // "clothes"/"clothing" are the one deliberate wildcard in SYNONYMS - their expansion
   // (top/dress/trouser/skirt/jacket/knitwear) is meant to stand in for "anything apparel"
@@ -270,74 +304,61 @@ async function lexicalSearch(env: Env, rawTerms: string[], category: string | nu
   // below. Every other synonym key still has to earn its match through an actual word hit.
   const isWildcardBrowse = rawTerms.some(t => t === 'clothes' || t === 'clothing');
 
-  return (results as any[]).map(r => {
-    const hay = `${r.title} ${r.category} ${r.style_tags} ${r.material} ${r.colour}`.toLowerCase();
-    const styleTags = String(r.style_tags).toLowerCase();
-    let score = 0;
-    // A generic synonym expansion (e.g. "warm" -> coat/jacket/knitwear) matches broad swaths
-    // of the catalogue on its own - useful for boosting a product that's already relevant,
-    // but it can't be what makes a product relevant in the first place. Require at least one
-    // hit that traces back to a word the customer actually typed (unless this is the
-    // deliberate "clothes" wildcard browse above).
-    let literalHit = rawTerms.length === 0 || isWildcardBrowse;
-    for (const t of expanded) {
-      const hayHit = hasWord(hay, t);
-      const catHit = String(r.category).toLowerCase().startsWith(t.replace(/e?s$/, ''));
-      const tagHit = hasWord(styleTags, t);
-      if (hayHit) score += 2;
-      if (catHit) score += 3;
-      if (tagHit) score += 2;
-      if ((hayHit || catHit || tagHit) && rawTerms.includes(t)) literalHit = true;
-    }
-    if (literalHit && score >= MIN_RELEVANCE) score += Number(r.relevance_boost ?? 0);
-    return { ...r, relevance: score, literalHit };
+  return rows.map(r => {
+    const { score, literalHit } = scoreLexical(r, rawTerms, expanded, isWildcardBrowse);
+    const relevance = literalHit && score >= MIN_RELEVANCE ? score + Number(r.relevance_boost ?? 0) : score;
+    return { ...r, relevance, literalHit };
   }).filter(r => r.literalHit && r.relevance >= MIN_RELEVANCE && r.stock > 0)
     .sort((a, b) => b.relevance - a.relevance || b.rating - a.rating)
     .slice(0, limit);
 }
 
-async function semanticSearch(env: Env, q: string, category: string | null, department: string | undefined, limit: number) {
+async function queryVectorMatches(env: Env, q: string, category: string | null, limit: number) {
   const embedded = await env.AI.run(EMBED_MODEL as any, { text: [q] }) as any;
   const vector = embedded.data[0] as number[];
-  // Capped at 99, not 100: D1 caps bound parameters per statement at 100, and the
-  // hydration query below binds one `?` per id plus one more for an optional department
+  // Capped at 99, not 100: D1 caps bound parameters per statement at 100, and any
+  // hydration query binds one `?` per id plus one more for an optional department
   // filter - 100 ids would leave no room for that extra bind and throw D1_ERROR
   // "too many SQL variables".
-  const topK = Math.min(limit * 3, 99);
+  const topK = Math.min(limit * 5, 99);
   const matches = await env.VECTORS.query(vector, {
     // The boolean form (`returnMetadata: false`) mis-serializes through wrangler's
     // remote-bindings proxy into invalid JSON for the real Vectorize API (VECTOR_QUERY_ERROR
     // code 40026, "expected value" at the returnMetadata key) - the string-enum form doesn't.
     topK, returnMetadata: 'none',
     // department isn't in the Vectorize metadata index (only category is), so it's applied
-    // at D1 hydration below instead, same as lexicalSearch does.
+    // at D1 hydration instead, same as lexicalSearch does.
     filter: category ? { category } : undefined,
   });
-  // Vectorize always returns its topK nearest neighbours, however distant - a query with
-  // nothing genuinely close in the index still gets back "matches" that are just the
-  // least-dissimilar vectors. Require a real similarity floor so an off-catalogue query
-  // (no vector match, similarity or otherwise) returns nothing rather than noise.
-  const MIN_SIMILARITY = 0.6;
-  const strong = matches.matches.filter(m => m.score >= MIN_SIMILARITY);
-  const ids = strong.map(m => m.id);
-  if (!ids.length) return [];
+  return matches.matches;
+}
 
-  const conditions: string[] = [`p.sku IN (${ids.map(() => '?').join(',')})`];
-  const binds: string[] = [...ids];
-  if (department && department !== 'unisex') {
-    conditions.push("(p.department = ? OR p.department = 'unisex')");
-    binds.push(department);
-  }
-  const stmt = env.DB.prepare(`
-    SELECT p.*, COALESCE((SELECT SUM(qty) FROM inventory v WHERE v.sku = p.sku),0) stock
-    FROM products p WHERE ${conditions.join(' AND ')}`).bind(...binds);
-  const { results } = await stmt.all();
+// Blends lexical keyword scoring with semantic (embedding) similarity into one ranked
+// list, instead of picking one retrieval method and using the other only as a fallback.
+// A product qualifies if EITHER signal genuinely supports it (a real word match, or a
+// strong vector similarity) - the two scores are then combined so a product both signals
+// agree on outranks one only one signal likes. This also means a synonym-only lexical
+// match (e.g. "warm" -> "outerwear" with no literal hit) can still surface a product if
+// the embedding independently thinks it's a strong match, and vice versa.
+async function hybridSearch(env: Env, rawTerms: string[], q: string, category: string | null, department: string | undefined, limit: number) {
+  const [rows, vectorMatches] = await Promise.all([
+    fetchCandidateRows(env, category, department),
+    queryVectorMatches(env, q, category, limit),
+  ]);
+  const semanticBySku = new Map(vectorMatches.map(m => [m.id, m.score]));
+  const expanded = expandTerms(rawTerms);
+  const isWildcardBrowse = rawTerms.some(t => t === 'clothes' || t === 'clothing');
 
-  const scoreBySku = new Map(strong.map(m => [m.id, m.score]));
-  return (results as any[])
-    .map(r => ({ ...r, relevance: r2((scoreBySku.get(r.sku) ?? 0) * 10 + Number(r.relevance_boost ?? 0)) }))
-    .filter(r => r.stock > 0)
-    .sort((a, b) => b.relevance - a.relevance)
+  return rows.map(r => {
+    const { score: lexicalScore, literalHit } = scoreLexical(r, rawTerms, expanded, isWildcardBrowse);
+    const semanticScore = semanticBySku.get(r.sku) ?? 0;
+    const qualifies = literalHit || semanticScore >= MIN_SIMILARITY;
+    const lexicalNorm = Math.min(1, lexicalScore / LEXICAL_SCORE_CEILING);
+    const semanticNorm = Math.max(0, Math.min(1, semanticScore));
+    const relevance = r2(lexicalNorm * 0.5 + semanticNorm * 0.5 + Number(r.relevance_boost ?? 0) / 20);
+    return { ...r, relevance, qualifies, lexicalScore, semanticScore: r2(semanticScore) };
+  }).filter(r => r.qualifies && r.stock > 0)
+    .sort((a, b) => b.relevance - a.relevance || b.rating - a.rating)
     .slice(0, limit);
 }
 
@@ -355,27 +376,25 @@ app.get('/catalogue/search', async c => {
 
   if (rawTerms.some(t => OUT_OF_CATALOGUE_TERMS.has(t))) {
     return c.json({
-      query: q, candidates: 0, results: [], mode: searchMode,
+      query: q, candidates: 0, results: [], mode: searchMode === 'semantic' ? 'hybrid' : 'lexical',
       degraded: true, degraded_reason: 'no kids/baby department in this catalogue',
     });
   }
 
+  // "AI mode" in the console toggles this on: hybrid blends lexical keyword scoring with
+  // embedding similarity instead of picking one and falling back to the other. It only
+  // degrades to lexical-only if the embedding/vector call itself fails - a hybrid result
+  // that's simply empty means neither signal found anything, and lexical alone wouldn't
+  // find more (hybridSearch already includes every product lexicalSearch would return).
   if (searchMode === 'semantic') {
     try {
-      const results = await semanticSearch(c.env, q, category, department, limit);
-      if (!results.length) {
-        const fallback = await lexicalSearch(c.env, rawTerms, category, department, limit);
-        return c.json({
-          query: q, candidates: fallback.length, results: fallback, mode: 'lexical', degraded: true,
-          degraded_reason: 'no vector matches',
-        });
-      }
-      return c.json({ query: q, candidates: results.length, results, mode: 'semantic' });
+      const results = await hybridSearch(c.env, rawTerms, q, category, department, limit);
+      return c.json({ query: q, candidates: results.length, results, mode: 'hybrid' });
     } catch (err) {
       const results = await lexicalSearch(c.env, rawTerms, category, department, limit);
       return c.json({
         query: q, candidates: results.length, results, mode: 'lexical', degraded: true,
-        degraded_reason: err instanceof Error ? err.message : 'semantic search unavailable',
+        degraded_reason: err instanceof Error ? err.message : 'hybrid search unavailable',
       });
     }
   }

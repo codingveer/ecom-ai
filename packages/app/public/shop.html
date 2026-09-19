@@ -326,7 +326,7 @@ async function runSearch(){
   lastProducts = d.payload.products;
   const modeNote = d.trace?.find(t => t.label?.startsWith('catalogue.search served'));
   const modeBadge = semanticSearch
-    ? `<span class="mode-badge ${modeNote?.detail?.degraded ? 'degraded' : 'semantic'}">${modeNote?.detail?.degraded ? 'semantic unavailable — fell back to keyword match' : 'semantic match'}</span>`
+    ? `<span class="mode-badge ${modeNote?.detail?.degraded ? 'degraded' : 'semantic'}">${modeNote?.detail?.degraded ? 'hybrid unavailable — fell back to keyword match' : 'hybrid match'}</span>`
     : '';
   $('resultsHead').innerHTML = `<div class="section-head"><h2 class="caps">Results</h2><span class="count">${d.payload.candidates} products</span>${modeBadge}</div>`;
   const mix = Object.entries(d.payload.price_tier_mix || {}).map(([t,n]) => `${n} ${t}`).join(', ');
