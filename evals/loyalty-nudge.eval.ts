@@ -18,7 +18,8 @@ function atMostTwoSentences({ output }: { output: string }) {
   return { name: 'at_most_two_sentences', score: sentences.length <= 2 ? 1 : 0 };
 }
 
-Eval('neutail-loyalty-nudge', {
+Eval('neutail', {
+  experimentName: 'loyalty-nudge',
   data: () => cases.map(c => ({ input: c })),
   task: async (input: Case) => runPrompt('loyalty.nudge', {
     awarded: input.awarded, multiplier: input.multiplier, entitlement: input.entitlement,

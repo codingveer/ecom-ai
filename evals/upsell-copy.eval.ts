@@ -18,7 +18,8 @@ function atMostTwoSentences({ output }: { output: string }) {
   return { name: 'at_most_two_sentences', score: sentences.length <= 2 ? 1 : 0 };
 }
 
-Eval('neutail-upsell-copy', {
+Eval('neutail', {
+  experimentName: 'upsell-copy',
   data: () => cases.map(c => ({ input: c })),
   task: async (input: Case) => runPrompt('upsell.copy', {
     feature: input.feature, sessions: input.sessions, signals: input.signals,

@@ -19,7 +19,8 @@ function respectsThreshold({ output, input }: { output: string; input: Case }) {
   return { name: 'threshold_respected', score: mentionsSize ? 0 : 1 };
 }
 
-Eval('neutail-fit-explanation', {
+Eval('neutail', {
+  experimentName: 'fit-explanation',
   data: () => cases.map(c => ({ input: c })),
   task: async (input: Case) => runPrompt('fit.explanation', {
     history: input.history, brand: input.brand, cut: input.cut, category: input.category,

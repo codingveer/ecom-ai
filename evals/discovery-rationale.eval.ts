@@ -62,7 +62,7 @@ export async function noInventedProducts({ output, input }: { output: string; in
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY is required to run evals');
-  const knownTitles = input.top.map(p => `- ${p.title}`).join('\n');
+  const knownTitles = input.top.map(p => `- ${p.title} (${p.sku})`).join('\n');
   const judgePrompt =
     `A retail assistant explained why a set of products suits a customer. The ONLY ` +
     `products it is allowed to mention are:\n${knownTitles}\n\n` +
@@ -95,7 +95,8 @@ function respectsGuardrail({ output, input }: { output: string; input: Case }) {
   return { name: 'guardrail_language', score: mentionsNeutral ? 1 : 0 };
 }
 
-Eval('neutail-discovery-rationale', {
+Eval('neutail', {
+  experimentName: 'discovery-rationale',
   data: () => cases.map(c => ({ input: c })),
   task: async (input: Case) => runPrompt('discovery.rationale', {
     segment: input.segment, affluence: input.affluence, tier: input.tier, aup: input.aup,

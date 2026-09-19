@@ -1,5 +1,21 @@
+/**
+ * LLM Gateway - Worker #3.
+ *
+ * The Mission #4 brief asks for a single gateway owning model routing and
+ * interoperability, prompt management and versioning, token accounting, and request
+ * and response logging.
+ *
+ * On Cloudflare, three of those four are platform features rather than code we wrote:
+ * AI Gateway sits in front of every provider and gives unified logging, caching,
+ * rate limiting and per-request analytics. What stays in this Worker is the part that
+ * is genuinely ours - the versioned prompt registry and the routing policy that maps a
+ * model *class* to a model, so an agent never names one.
+ *
+ * Providers: mock | workers-ai | anthropic | openai.
+ * `mock` is deterministic and runs with no network at all - rehearse on it.
+ */
 import { Hono } from 'hono';
-import { initLogger } from 'braintrust';
+import { initLogger, type Span } from 'braintrust';
 import { PROMPTS, type Prompt } from './prompts.js';
 import { mockComplete } from './mock.js';
 import { render, ROUTING, callAnthropic, callOpenAI, callWorkersAI } from './providers.js';
@@ -62,6 +78,11 @@ app.post('/complete', async c => {
 
   let out: { text: string; input_tokens: number; output_tokens: number; via_gateway?: boolean };
   let degraded = false;
+  // A plain `let span: Span | null` reassigned only inside the traced() closure below
+  // defeats TypeScript's control-flow narrowing (a variable mutated solely from a
+  // nested function is never narrowed away from its initializer type), so the
+  // still-open reference is held in a small ref cell instead.
+  const spanRef: { current: Span | null } = { current: null };
   const runProviderCall = async () => {
     if (provider === 'workers-ai' && !c.env.AI) throw new Error('AI binding not enabled');
     if (provider === 'anthropic') return await callAnthropic(c.env.ANTHROPIC_API_KEY ?? '', base, model, prompt.system, user);
@@ -72,13 +93,8 @@ app.post('/complete', async c => {
   try {
     out = logger
       ? await logger.traced(async span => {
-          const result = await runProviderCall();
-          span.log({
-            input: { system: prompt.system, user },
-            output: result.text,
-            metadata: { agent, prompt_id, prompt_version: prompt.version, model, provider },
-          });
-          return result;
+          spanRef.current = span;
+          return await runProviderCall();
         }, { name: `llm.complete:${prompt_id}` })
       : await runProviderCall();
   } catch {
@@ -94,6 +110,17 @@ app.post('/complete', async c => {
     input_tokens: out.input_tokens, output_tokens: out.output_tokens,
     latency_ms: Date.now() - started, degraded,
   };
+
+  // Logged here rather than inside logger.traced() above so the span carries the full
+  // meta object - degraded/latency_ms/final token counts aren't known until after the
+  // provider call block completes.
+  if (spanRef.current) {
+    spanRef.current.log({
+      input: { system: prompt.system, user },
+      output: out.text,
+      metadata: { agent, ...meta },
+    });
+  }
 
   // Token accounting in a Durable Object: one consistent counter for the whole deployment.
   c.executionCtx.waitUntil(usageStub(c.env).fetch('https://usage/record', {

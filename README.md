@@ -16,6 +16,7 @@ npm run dev        # four Workers with service bindings wired between them, plus
 Then open http://localhost:8100 and **send one throwaway message before you demo**.
 The first request after `wrangler dev` boots can time out while the Workers cold-start;
 everything after it is fast. `npm run smoke` replays the whole demo on the command line.
+`npm run eval` runs the offline eval suite, needs `OPENAI_API_KEY`.
 
 Re-run `npm run db:local` before each rehearsal — the demo mutates subscription and
 loyalty state, so a fresh load puts every persona back to its starting position.

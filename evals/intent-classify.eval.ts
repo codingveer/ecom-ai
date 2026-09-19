@@ -36,7 +36,8 @@ function intentMatches({ output, expected }: { output: string; expected: { expec
   }
 }
 
-Eval('neutail-intent-classify', {
+Eval('neutail', {
+  experimentName: 'intent-classify',
   data: () => cases.map(c => ({
     input: { utterance: c.utterance, history: c.history },
     expected: { expectedIntent: c.expectedIntent },
