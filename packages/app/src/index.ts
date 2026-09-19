@@ -8,7 +8,7 @@ import { Hono } from 'hono';
 import { agentsMiddleware } from 'hono-agents';
 import { Kernel, Trace, type GatewayBindings } from './kernel.js';
 
-type Env = GatewayBindings & { SessionAgent: DurableObjectNamespace; ASSETS: Fetcher };
+type Env = GatewayBindings & { SessionAgent: DurableObjectNamespace; ASSETS: Fetcher; ADMIN_TOKEN?: string };
 const app = new Hono<{ Bindings: Env }>();
 
 app.use('*', agentsMiddleware());
@@ -32,6 +32,32 @@ app.get('/session/:id', async c =>
 app.post('/session/:id/reset', async c =>
   new Response((await session(c.env, c.req.param('id')).fetch('https://session/reset', { method: 'POST' })).body,
     { headers: { 'content-type': 'application/json' } }));
+
+app.get('/session/:id/credits', async c =>
+  new Response((await session(c.env, c.req.param('id')).fetch('https://session/credits')).body,
+    { headers: { 'content-type': 'application/json' } }));
+
+// User-facing: "I've hit the limit, please give me more" - just raises a flag an admin
+// sees via GET /session/:id/credits (requestedMore). No auth needed, it can't grant
+// anything by itself.
+app.post('/session/:id/credits/request', async c =>
+  new Response((await session(c.env, c.req.param('id')).fetch('https://session/credits/request', { method: 'POST' })).body,
+    { headers: { 'content-type': 'application/json' } }));
+
+// Admin-only: actually raises the limit. Gated on a shared secret (wrangler secret put
+// ADMIN_TOKEN) since this Worker is what's shared publicly for the demo and an open
+// grant endpoint would defeat the whole point of capping token spend.
+app.post('/admin/sessions/:id/credits', async c => {
+  if (!c.env.ADMIN_TOKEN || c.req.header('x-admin-token') !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: 'unauthorized' }, 401);
+  }
+  let body: any;
+  try { body = await c.req.json(); } catch { return c.json({ error: 'invalid_json' }, 400); }
+  const r = await session(c.env, c.req.param('id')).fetch('https://session/credits/grant', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  return new Response(r.body, r);
+});
 
 /**
  * Modelled business outcome, computed from the live corpus rather than asserted.
@@ -96,6 +122,15 @@ app.post('/admin/products/:sku', async c => {
   try { body = await c.req.json(); } catch { return c.json({ error: 'invalid_json' }, 400); }
   try {
     return c.json(await k.invoke('catalogue.admin.update', { ...body, sku: c.req.param('sku') }));
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
+app.post('/admin/reindex', async c => {
+  try {
+    const qs = c.req.url.includes('?') ? '?' + c.req.url.split('?')[1] : '';
+    const r = await c.env.TOOLS.fetch(`https://tools.internal/proxy/catalogue/reindex${qs}`, { method: 'POST' });
+    const body = await r.text();
+    return new Response(body, { status: r.status, headers: { 'content-type': r.headers.get('content-type') ?? 'application/json' } });
   } catch (e) { return c.json({ error: String(e) }, 502); }
 });
 

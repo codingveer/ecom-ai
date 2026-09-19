@@ -38,4 +38,10 @@ export type TurnTrace = {
   memory: { within_session: { turns: unknown[]; working: unknown }; across_sessions: Record<string, unknown> };
 };
 
-export type ChatMessage = UIMessage<unknown, { trace: TurnTrace }>;
+// Mirrors `packages/app/src/session-do.ts`'s `Credits` shape, sent on the `data-credits`
+// stream part of every turn (see `onChatMessage`) plus a `blocked` flag set only when that
+// turn was rejected for having exhausted the budget - the console uses `blocked` to decide
+// whether to pop the limit-reached modal, rather than string-matching the reply text.
+export type Credits = { used: number; limit: number; requestedMore: boolean; blocked: boolean };
+
+export type ChatMessage = UIMessage<unknown, { trace: TurnTrace; credits: Credits }>;

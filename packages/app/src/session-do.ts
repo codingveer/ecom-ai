@@ -38,14 +38,24 @@ type Working = {
 };
 type State = { customerId: string | null; startedAt: string; turns: Turn[]; working: Working };
 
+// Per-session turn budget, deliberately keyed by session id, not customerId: switching
+// between demo personas (Arjun, Aditi, ...) on the same session is just picking a
+// different seed customer to role-play, not a new visitor, so it must not reset the
+// budget. Stored under its own storage key so the customer-switch reset in handleTurn
+// (which replaces `session`) never touches it. Default of 3 matches scripts/smoke.ts's
+// heaviest scenario (demo-c, 3 messages) - raise both together if that scenario grows.
+type Credits = { used: number; limit: number; requestedMore: boolean };
+const DEFAULT_CREDIT_LIMIT = 3;
+
 type TurnFlags = { unsafeRanking?: boolean; semanticSearch?: boolean };
 export type TurnResult =
   | {
       ok: true; reply: string; intent: string; intent_confidence: number; agent: string;
       payload: unknown; trace: TraceStep[]; customerSwitched: boolean;
       memory: { within_session: { turns: Turn[]; working: Working }; across_sessions: unknown };
+      credits: Credits;
     }
-  | { ok: false; error: string; detail: string; trace: TraceStep[] };
+  | { ok: false; error: string; detail: string; trace: TraceStep[]; credits: Credits };
 
 const ACCEPT = /\b(accept|yes please|yes|upgrade me|sign me up|take it|go ahead)\b/i;
 
@@ -55,7 +65,25 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
       ?? { customerId: null, startedAt: new Date().toISOString(), turns: [], working: {} };
   }
 
+  private async loadCredits(): Promise<Credits> {
+    return (await this.ctx.storage.get<Credits>('credits'))
+      ?? { used: 0, limit: DEFAULT_CREDIT_LIMIT, requestedMore: false };
+  }
+
   async handleTurn(customerId: string, text: string, flags: TurnFlags): Promise<TurnResult> {
+    // Gate before any LLM/tool call is made - a blocked turn must cost nothing.
+    const credits = await this.loadCredits();
+    if (credits.used >= credits.limit) {
+      return {
+        ok: false, error: 'credit_limit_reached',
+        detail: `This demo session has used all ${credits.limit} allotted turns. Ask an admin to raise the `
+          + `limit for this session, or start a new one.`,
+        trace: [], credits,
+      };
+    }
+    credits.used += 1;
+    await this.ctx.storage.put('credits', credits);
+
     let session = await this.load();
 
     // A different customer on the same session id starts clean. Context never leaks
@@ -253,9 +281,10 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
         within_session: { turns: session.turns, working: session.working },
         across_sessions: longTerm,
       },
+      credits,
     };
     } catch (e) {
-      return { ok: false, error: 'agent_error', detail: String(e), trace: trace.steps };
+      return { ok: false, error: 'agent_error', detail: String(e), trace: trace.steps, credits };
     }
   }
 
@@ -316,6 +345,13 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
           writer.write({ type: 'text-start', id: 'reply' });
           writer.write({ type: 'text-delta', id: 'reply', delta: result.detail });
           writer.write({ type: 'text-end', id: 'reply' });
+          // Structured, not string-matched: the console detects the credit-limit case (to
+          // show a modal rather than just a bubble) off this field, not off `result.detail`'s
+          // wording, which is free to change without silently breaking that detection.
+          writer.write({
+            type: 'data-credits', id: 'turn-credits',
+            data: { ...result.credits, blocked: result.error === 'credit_limit_reached' },
+          });
           return;
         }
 
@@ -336,6 +372,10 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
             intent: result.intent, intent_confidence: result.intent_confidence, agent: result.agent,
             payload: result.payload, trace: result.trace, memory: result.memory,
           },
+        });
+        writer.write({
+          type: 'data-credits', id: 'turn-credits',
+          data: { ...result.credits, blocked: false },
         });
       },
     });
@@ -366,6 +406,28 @@ export class SessionAgent extends AIChatAgent<GatewayBindings> {
       await this.sessions.session().clearMessages();
       return Response.json({ reset: true });
     }
+    if (url.pathname === '/credits') return Response.json(await this.loadCredits());
+
+    if (url.pathname === '/credits/request') {
+      if (req.method !== 'POST') return new Response('not found', { status: 404 });
+      const credits = await this.loadCredits();
+      credits.requestedMore = true;
+      await this.ctx.storage.put('credits', credits);
+      return Response.json(credits);
+    }
+
+    if (url.pathname === '/credits/grant') {
+      if (req.method !== 'POST') return new Response('not found', { status: 404 });
+      const body = await req.json<any>().catch(() => ({}));
+      const limit = Number(body.limit);
+      if (!Number.isFinite(limit) || limit < 0) return Response.json({ error: 'invalid_limit' }, { status: 400 });
+      const credits = await this.loadCredits();
+      credits.limit = limit;
+      credits.requestedMore = false;
+      await this.ctx.storage.put('credits', credits);
+      return Response.json(credits);
+    }
+
     if (url.pathname !== '/message') return new Response('not found', { status: 404 });
 
     let body: any;

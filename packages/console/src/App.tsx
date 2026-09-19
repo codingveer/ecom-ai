@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAgent } from 'agents/react';
 import { useAgentChat } from '@cloudflare/ai-chat/react';
-import type { ChatMessage, TurnTrace } from './ChatMessage';
+import type { ChatMessage, Credits, TurnTrace } from './ChatMessage';
 
 const PERSONAS = [
   { id: 'C001', name: 'Priya', note: 'affluent, loyal, rich fit history' },
@@ -70,6 +70,11 @@ function traceOf(message: ChatMessage): TurnTrace | undefined {
   return part && 'data' in part ? (part.data as TurnTrace) : undefined;
 }
 
+function creditsOf(message: ChatMessage): Credits | undefined {
+  const part = message.parts.find(p => p.type === 'data-credits');
+  return part && 'data' in part ? (part.data as Credits) : undefined;
+}
+
 /**
  * Everything that talks to a single SessionAgent instance. Mounted with
  * `key={sessionId}` by `App` below, so switching customers - which always
@@ -95,12 +100,51 @@ function traceOf(message: ChatMessage): TurnTrace | undefined {
 function ChatSession({ customerId, sessionId }: { customerId: string; sessionId: string }) {
   const [input, setInput] = useState('');
   const [memorySummary, setMemorySummary] = useState('');
+  const [initialCredits, setInitialCredits] = useState<Omit<Credits, 'blocked'> | null>(null);
+  // Two separate states, deliberately not one: `seenBlockedId` remembers which blocked
+  // message has already been reacted to (so a later re-render doesn't re-trigger the
+  // effect below for the same turn), while `modalOpen` is purely the visible/dismissed
+  // toggle Close controls. Collapsing them into one (e.g. clearing `seenBlockedId` on
+  // Close) makes Close a no-op: the effect still sees the same blocked last message and
+  // treats "closed" as "never shown", reopening the modal immediately.
+  const [seenBlockedId, setSeenBlockedId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [requestState, setRequestState] = useState<'idle' | 'sending' | 'sent'>('idle');
 
   const agent = useAgent({ agent: 'SessionAgent', name: sessionId });
   const { messages, sendMessage, status } = useAgentChat<unknown, ChatMessage>({
     agent,
     body: () => ({ customerId }),
   });
+
+  // Seeds the meter before the first turn's `data-credits` part exists. Refetched per
+  // session (not per turn) since every turn after the first updates it live off the
+  // stream instead - see `lastCredits` below.
+  useEffect(() => {
+    fetch(`/session/${sessionId}/credits`)
+      .then(r => r.json())
+      .then((d: any) => setInitialCredits({ used: d.used, limit: d.limit, requestedMore: d.requestedMore }))
+      .catch(() => setInitialCredits(null));
+  }, [sessionId]);
+
+  // Pops the limit-reached modal the first time a turn comes back blocked. Guards on
+  // `seenBlockedId`, not `modalOpen`, precisely so dismissing the modal doesn't make this
+  // effect think the block is unseen and reopen it on the very next render.
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    const credits = last && creditsOf(last);
+    if (credits?.blocked && seenBlockedId !== last.id) {
+      setSeenBlockedId(last.id);
+      setModalOpen(true);
+    }
+  }, [messages, seenBlockedId]);
+
+  function requestMoreCredits() {
+    setRequestState('sending');
+    fetch(`/session/${sessionId}/credits/request`, { method: 'POST' })
+      .then(() => setRequestState('sent'))
+      .catch(() => setRequestState('idle'));
+  }
 
   // Mount-time-only indicator that long-term context exists on file, before the first
   // message. A fresh session's own turns/working are always empty at mount (sessions are
@@ -149,6 +193,15 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
     }
     return undefined;
   }, [messages]);
+
+  const lastCredits = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const c = creditsOf(messages[i]);
+      if (c) return c;
+    }
+    return undefined;
+  }, [messages]);
+  const credits = lastCredits ?? (initialCredits && { ...initialCredits, blocked: false });
 
   // `lastTrace.memory.within_session` is THIS session's turn history; `across_sessions`
   // is the D1-backed long-term context (segment, propensity, confirmed fit recs, ...) -
@@ -234,9 +287,36 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
           <span>model calls <b>{totals.llm}</b></span>
           <span>tokens <b>{totals.tokens}</b></span>
           <span>policy checks <b>{totals.policy}</b></span>
+          {credits && (
+            <span className={credits.used >= credits.limit ? 'credits low' : 'credits'}>
+              credits <b>{credits.used}/{credits.limit}</b>
+            </span>
+          )}
           <span>{meter}</span>
         </div>
       </section>
+
+      {modalOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true">
+          <div className="modal">
+            <h2>Demo turn limit reached</h2>
+            <p>
+              This session has used all {credits?.limit ?? ''} of its free turns. Ask an admin to raise the
+              limit, or start a new session with a different persona.
+            </p>
+            <div className="modal-actions">
+              <button className="ghost" onClick={() => setModalOpen(false)}>Close</button>
+              <button
+                className="primary"
+                disabled={requestState !== 'idle'}
+                onClick={requestMoreCredits}
+              >
+                {requestState === 'sent' ? 'Requested' : requestState === 'sending' ? 'Requesting…' : 'Request more credits'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
