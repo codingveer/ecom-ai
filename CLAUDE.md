@@ -26,6 +26,7 @@ npm run dev              # four Workers plus the console's Vite dev server, conc
 npm run typecheck       # tsc --noEmit for packages/, tsconfig.scripts.json for scripts/, plus the console's own typecheck
 npm run smoke            # scripts/smoke.ts — replays the whole demo end-to-end via HTTP, no browser needed
 npm run build:console    # builds packages/console into packages/app/public/ (index.html + assets/) — the committed build is what `npm run dev`/a fresh clone serves; re-run and re-commit after any packages/console/src change
+npm run eval              # braintrust eval evals — offline eval suite over the prompts in packages/llm/prompts/; needs OPENAI_API_KEY (.env, gitignored) and uploads scored experiments to Braintrust (needs BRAINTRUST_API_KEY, .env.braintrust, gitignored)
 ```
 
 Individual workers can be run alone with `npm run dev:services` / `dev:tools` / `dev:llm` / `dev:app` (same ports as above), useful when iterating on one Worker.
@@ -97,17 +98,48 @@ restores the bundled set.
 **LLM gateway (`packages/llm/src/index.ts`) owns two things only:** a versioned prompt
 registry (`packages/llm/src/prompts.ts`, sourced from `packages/llm/prompts/*.json`) and
 a routing table that maps a model *class* (`reasoning` | `low_latency`) to an actual
-model per provider — agents ask for a prompt id, never a model. Everything else the
-brief asks a gateway to own (logging, caching, rate limiting, per-request analytics) is
-AI Gateway, configured via `AI_GATEWAY_ACCOUNT_ID`/`AI_GATEWAY_NAME`, not code here.
-`LLM_PROVIDER` (`packages/llm/wrangler.jsonc`) selects `mock` | `workers-ai` |
-`anthropic` | `openai`; if a live provider call throws, `/complete` catches it and falls
-back to `mockComplete` (`packages/llm/src/mock.ts`) with `degraded: true` in the
-response metadata rather than erroring — every M3 sequence has a degrade path, and this
-mirrors that. `mock` is fully deterministic (no network) and is what demos should be
-rehearsed on. Token accounting lives in a second Durable Object, `UsageCounter`
-(`packages/llm/src/usage-do.ts`), for one consistent counter across the whole
-deployment rather than per-instance numbers.
+model per provider — agents ask for a prompt id, never a model. The actual
+provider-calling code (`render`, `ROUTING`, `callAnthropic`, `callOpenAI`,
+`callWorkersAI`) lives in `packages/llm/src/providers.ts`, extracted out of `index.ts` so
+the offline eval harness (a plain Node script, not a Worker) can call the exact same
+rendering/HTTP logic the Worker uses in production rather than reimplementing it —
+`prompts.ts` stays the generated prompt registry, `providers.ts` is the hand-written
+provider layer next to it. Everything else the brief asks a gateway to own (logging,
+caching, rate limiting, per-request analytics) is AI Gateway, configured via
+`AI_GATEWAY_ACCOUNT_ID`/`AI_GATEWAY_NAME`, not code here. `LLM_PROVIDER`
+(`packages/llm/wrangler.jsonc`) selects `mock` | `workers-ai` | `anthropic` | `openai`;
+if a live provider call throws, `/complete` catches it and falls back to `mockComplete`
+(`packages/llm/src/mock.ts`) with `degraded: true` in the response metadata rather than
+erroring — every M3 sequence has a degrade path, and this mirrors that. `mock` is fully
+deterministic (no network) and is what demos should be rehearsed on. Token accounting
+lives in a second Durable Object, `UsageCounter` (`packages/llm/src/usage-do.ts`), for
+one consistent counter across the whole deployment rather than per-instance numbers.
+
+**Every `/complete` call is also traced to Braintrust, when configured — same
+degrade-gracefully convention as everything else here.** If `BRAINTRUST_API_KEY` is set
+(for local `wrangler dev`, via the gitignored `packages/llm/.dev.vars`; when deployed,
+`wrangler secret put`), `/complete` wraps the provider call in a Braintrust `traced`
+span (`initLogger` is called per-request, since Workers have no module-level startup
+phase with bindings available, and it's idempotent to call repeatedly) and flushes it
+via `waitUntil` so the response isn't delayed. If the key isn't set, `logger` is `null`
+and the provider call runs exactly as it did before tracing existed — no error, no
+behavior change, just no trace uploaded. This is separate from the root-level, gitignored
+`.env.braintrust` used by `npm run eval` below (that one authenticates the `braintrust`
+CLI itself, a plain Node process, not the Worker) — tracing observes real `/complete`
+traffic, evals score prompts against fixed cases.
+
+**`npm run eval` runs the offline Braintrust eval suite** (`evals/*.eval.ts`, one file
+per scored prompt: `intent-classify`, `discovery-rationale`, `fit-explanation`,
+`upsell-copy`, `loyalty-nudge`). It calls `providers.ts` directly against a live OpenAI
+model, not the mock — so it needs `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL`),
+gitignored in `.env` — and uploads each run as a scored experiment to Braintrust's
+hosted platform, which also needs `BRAINTRUST_API_KEY` to authenticate the upload. Four
+of the five eval files run every case through a shared `coherenceJudge`
+(`evals/lib/judge.ts`); `intent-classify.eval.ts` deliberately omits it because that
+prompt's output is raw JSON, not prose, and the judge's rubric is written for prose.
+`discovery-rationale.eval.ts`'s `no_invented_products` scorer is an LLM-judge check, not
+a regex/word-overlap heuristic — earlier heuristic versions had false positives, so this
+is a considered design choice, not an oversight.
 
 **Policy is separated from agent logic on purpose.** `packages/app/src/policy.ts` holds
 four pure predicate functions (`fairnessBand`, `fitConsent`, `piiMinimisation`,
