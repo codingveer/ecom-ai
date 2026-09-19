@@ -24,5 +24,12 @@
   "kv_namespaces": [
     { "binding": "AI_ACCESS_KEYS", "id": "1dd3bce9f23f4cf8923fcf3f477a9e05" }
   ],
+  // ADMIN_TOKEN lives in the account's Secrets Store (same one as OPENAI_API_KEY in
+  // packages/llm/wrangler.jsonc) - a `.get()` binding, not a plain string. Not present
+  // locally: local dev keeps using .dev.vars' plain ADMIN_TOKEN string, which
+  // resolveAdminToken in src/index.ts accepts either way.
+  "secrets_store_secrets": [
+    { "binding": "ADMIN_TOKEN", "store_id": "8f7a392f5caa4405b301782dcf461946", "secret_name": "ADMIN_TOKEN" }
+  ],
   "assets": { "directory": "public", "binding": "ASSETS" }
 }

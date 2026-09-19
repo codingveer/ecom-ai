@@ -8,10 +8,20 @@ import { Hono } from 'hono';
 import { agentsMiddleware } from 'hono-agents';
 import { Kernel, Trace, type GatewayBindings } from './kernel.js';
 
+// Not in the default @cloudflare/workers-types entrypoint (only /experimental) - declared
+// locally rather than switching the whole project's types over for one binding shape.
+type SecretsStoreSecret = { get(): Promise<string> };
+
 type Env = GatewayBindings & {
-  SessionAgent: DurableObjectNamespace; ASSETS: Fetcher; ADMIN_TOKEN?: string;
+  SessionAgent: DurableObjectNamespace; ASSETS: Fetcher;
+  // A Secrets Store binding (`.get()`) in production; classic `wrangler secret put`
+  // (plain string) still works too - see resolveAdminToken.
+  ADMIN_TOKEN?: string | SecretsStoreSecret;
   AI_ACCESS_KEYS: KVNamespace;
 };
+
+const resolveAdminToken = async (env: Env) =>
+  typeof env.ADMIN_TOKEN === 'string' ? env.ADMIN_TOKEN : (await env.ADMIN_TOKEN?.get()) ?? '';
 const app = new Hono<{ Bindings: Env }>();
 
 app.use('*', agentsMiddleware());
@@ -51,9 +61,7 @@ app.post('/session/:id/credits/request', async c =>
 // ADMIN_TOKEN) since this Worker is what's shared publicly for the demo and an open
 // grant endpoint would defeat the whole point of capping token spend.
 app.post('/admin/sessions/:id/credits', async c => {
-  if (!c.env.ADMIN_TOKEN || c.req.header('x-admin-token') !== c.env.ADMIN_TOKEN) {
-    return c.json({ error: 'unauthorized' }, 401);
-  }
+  if (!(await adminAuthed(c))) return c.json({ error: 'unauthorized' }, 401);
   let body: any;
   try { body = await c.req.json(); } catch { return c.json({ error: 'invalid_json' }, 400); }
   const r = await session(c.env, c.req.param('id')).fetch('https://session/credits/grant', {
@@ -70,18 +78,20 @@ app.post('/admin/sessions/:id/credits', async c => {
  * checks it against this same KV store before letting a turn's Kernel calls override
  * the LLM gateway's mock default (see checkLiveAI in session-do.ts).
  */
-const adminAuthed = (c: { req: { header(name: string): string | undefined }; env: Env }) =>
-  !!c.env.ADMIN_TOKEN && c.req.header('x-admin-token') === c.env.ADMIN_TOKEN;
+const adminAuthed = async (c: { req: { header(name: string): string | undefined }; env: Env }) => {
+  const token = await resolveAdminToken(c.env);
+  return !!token && c.req.header('x-admin-token') === token;
+};
 
 // Backs admin.html's login form: lets the browser check a token before storing it and
 // revealing the admin UI, without that check having any side effect of its own.
 app.get('/admin/verify', async c => {
-  if (!adminAuthed(c)) return c.json({ ok: false }, 401);
+  if (!(await adminAuthed(c))) return c.json({ ok: false }, 401);
   return c.json({ ok: true });
 });
 
 app.post('/admin/ai-keys', async c => {
-  if (!adminAuthed(c)) return c.json({ error: 'unauthorized' }, 401);
+  if (!(await adminAuthed(c))) return c.json({ error: 'unauthorized' }, 401);
   const token = crypto.randomUUID();
   const record = { active: true, createdAt: new Date().toISOString() };
   await c.env.AI_ACCESS_KEYS.put(`key:${token}`, JSON.stringify(record));
@@ -89,7 +99,7 @@ app.post('/admin/ai-keys', async c => {
 });
 
 app.get('/admin/ai-keys', async c => {
-  if (!adminAuthed(c)) return c.json({ error: 'unauthorized' }, 401);
+  if (!(await adminAuthed(c))) return c.json({ error: 'unauthorized' }, 401);
   const list = await c.env.AI_ACCESS_KEYS.list({ prefix: 'key:' });
   const keys = await Promise.all(list.keys.map(async k => {
     const record = await c.env.AI_ACCESS_KEYS.get<any>(k.name, 'json');
@@ -99,7 +109,7 @@ app.get('/admin/ai-keys', async c => {
 });
 
 app.post('/admin/ai-keys/:token/activate', async c => {
-  if (!adminAuthed(c)) return c.json({ error: 'unauthorized' }, 401);
+  if (!(await adminAuthed(c))) return c.json({ error: 'unauthorized' }, 401);
   const kvKey = `key:${c.req.param('token')}`;
   const record = await c.env.AI_ACCESS_KEYS.get<any>(kvKey, 'json');
   if (!record) return c.json({ error: 'not_found' }, 404);
@@ -109,7 +119,7 @@ app.post('/admin/ai-keys/:token/activate', async c => {
 });
 
 app.post('/admin/ai-keys/:token/deactivate', async c => {
-  if (!adminAuthed(c)) return c.json({ error: 'unauthorized' }, 401);
+  if (!(await adminAuthed(c))) return c.json({ error: 'unauthorized' }, 401);
   const kvKey = `key:${c.req.param('token')}`;
   const record = await c.env.AI_ACCESS_KEYS.get<any>(kvKey, 'json');
   if (!record) return c.json({ error: 'not_found' }, 404);
