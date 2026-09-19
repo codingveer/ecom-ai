@@ -202,7 +202,12 @@ async function ask(text, extra = {}){
       method:'POST', headers:{'content-type':'application/json'},
       body: JSON.stringify({ customerId, text, ...extra })
     });
-    return await r.json();
+    const d = await r.json();
+    // Error responses (e.g. credit_limit_reached) carry `detail`, not `reply` - every
+    // call site below reads `d.reply`, so without this an error renders the literal
+    // string "undefined" instead of a message.
+    if (d.error && !d.reply) d.reply = d.detail || 'Something went wrong. Please try again.';
+    return d;
   } catch (e) {
     return { error:'unreachable', reply:'The shop backend is not reachable. Start the stack with npm run dev.' };
   }
