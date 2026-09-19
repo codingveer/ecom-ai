@@ -3,6 +3,7 @@
   "name": "neutail-llm",
   "main": "src/index.ts",
   "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
 
   // No d1_databases, no service binding to services. The gateway sees prompts and
   // model providers, never customer data.
@@ -18,9 +19,11 @@
   ],
   "vars": {
     "LLM_PROVIDER": "mock",
-    "AI_GATEWAY_NAME": "neutail"
+    "AI_GATEWAY_NAME": "neutail",
+    "BRAINTRUST_PROJECT": "neutail"
     // AI_GATEWAY_ACCOUNT_ID: set as a var or secret
     // ANTHROPIC_API_KEY / OPENAI_API_KEY: wrangler secret put
+    // BRAINTRUST_API_KEY: wrangler secret put (deployed); .dev.vars (local dev)
   },
   "workers_dev": false
 }

@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { initLogger } from 'braintrust';
 import { PROMPTS, type Prompt } from './prompts.js';
 import { mockComplete } from './mock.js';
 import { render, ROUTING, callAnthropic, callOpenAI, callWorkersAI } from './providers.js';
@@ -11,6 +12,8 @@ type Env = {
   AI_GATEWAY_NAME?: string;
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
+  BRAINTRUST_API_KEY?: string;
+  BRAINTRUST_PROJECT?: string;
 };
 
 const prompts = new Map(PROMPTS.map(p => [p.id, p]));
@@ -48,14 +51,36 @@ app.post('/complete', async c => {
   const user = render(prompt.template, variables);
   const base = gatewayBase(c.env);
 
+  // Workers have no module-level "startup" phase with bindings available, so this has
+  // to happen per-request rather than once at cold start. initLogger is idempotent to
+  // call repeatedly - this mirrors the existing "degrade gracefully when not
+  // configured" pattern already used for gatewayBase(): no key set, zero behavior
+  // change, just no tracing.
+  const logger = c.env.BRAINTRUST_API_KEY
+    ? initLogger({ apiKey: c.env.BRAINTRUST_API_KEY, projectName: c.env.BRAINTRUST_PROJECT })
+    : null;
+
   let out: { text: string; input_tokens: number; output_tokens: number; via_gateway?: boolean };
   let degraded = false;
-  try {
+  const runProviderCall = async () => {
     if (provider === 'workers-ai' && !c.env.AI) throw new Error('AI binding not enabled');
-    if (provider === 'anthropic') out = await callAnthropic(c.env.ANTHROPIC_API_KEY ?? '', base, model, prompt.system, user);
-    else if (provider === 'openai') out = await callOpenAI(c.env.OPENAI_API_KEY ?? '', base, model, prompt.system, user);
-    else if (provider === 'workers-ai') out = await callWorkersAI(c.env.AI!, c.env.AI_GATEWAY_NAME ?? null, model, prompt.system, user);
-    else out = mockComplete(prompt_id, variables, prompt.system, user);
+    if (provider === 'anthropic') return await callAnthropic(c.env.ANTHROPIC_API_KEY ?? '', base, model, prompt.system, user);
+    else if (provider === 'openai') return await callOpenAI(c.env.OPENAI_API_KEY ?? '', base, model, prompt.system, user);
+    else if (provider === 'workers-ai') return await callWorkersAI(c.env.AI!, c.env.AI_GATEWAY_NAME ?? null, model, prompt.system, user);
+    else return mockComplete(prompt_id, variables, prompt.system, user);
+  };
+  try {
+    out = logger
+      ? await logger.traced(async span => {
+          const result = await runProviderCall();
+          span.log({
+            input: { system: prompt.system, user },
+            output: result.text,
+            metadata: { agent, prompt_id, prompt_version: prompt.version, model, provider },
+          });
+          return result;
+        }, { name: `llm.complete:${prompt_id}` })
+      : await runProviderCall();
   } catch {
     // Degrade rather than fail - every M3 sequence has a degrade path, not an error path.
     degraded = true;
@@ -76,6 +101,8 @@ app.post('/complete', async c => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ agent, ...meta, request: user, response: out.text }),
   }));
+
+  if (logger) c.executionCtx.waitUntil(logger.flush());
 
   return c.json({ ok: true, text: out.text, meta });
 });
