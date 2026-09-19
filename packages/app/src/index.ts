@@ -73,6 +73,13 @@ app.post('/admin/sessions/:id/credits', async c => {
 const adminAuthed = (c: { req: { header(name: string): string | undefined }; env: Env }) =>
   !!c.env.ADMIN_TOKEN && c.req.header('x-admin-token') === c.env.ADMIN_TOKEN;
 
+// Backs admin.html's login form: lets the browser check a token before storing it and
+// revealing the admin UI, without that check having any side effect of its own.
+app.get('/admin/verify', async c => {
+  if (!adminAuthed(c)) return c.json({ ok: false }, 401);
+  return c.json({ ok: true });
+});
+
 app.post('/admin/ai-keys', async c => {
   if (!adminAuthed(c)) return c.json({ error: 'unauthorized' }, 401);
   const token = crypto.randomUUID();

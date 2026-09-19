@@ -59,7 +59,6 @@
   .credits-field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin-bottom:4px}
   .credits-field input{font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--rule);border-radius:6px}
   #c_sessionId{width:260px}
-  #c_token{width:220px}
   #c_limit{width:100px}
   .credits-row button{font:inherit;font-size:13px;font-weight:600;padding:7px 14px;border:0;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer}
   .credits-row button:disabled{opacity:.4;cursor:default}
@@ -81,24 +80,46 @@
   .ai-keys-panel .status-dot.inactive{background:var(--mute)}
   .ai-keys-panel button.small{font:inherit;font-size:12px;font-weight:600;padding:4px 10px;border:1px solid var(--rule);border-radius:6px;background:#fff;cursor:pointer}
   .ai-keys-panel button.small.copy{color:var(--accent);border-color:var(--accent)}
+
+  .login-wrap{min-height:calc(100vh - 60px);display:flex;align-items:center;justify-content:center;padding:24px}
+  .login-card{width:100%;max-width:340px;border:1px solid var(--rule);border-radius:10px;padding:28px 26px}
+  .login-card h2{font-size:16px;margin:0 0 4px}
+  .login-card .sub{font-size:12.5px;color:var(--mute);margin-bottom:20px}
+  .login-card label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);margin-bottom:5px}
+  .login-card input{width:100%;font:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--rule);border-radius:6px;margin-bottom:14px}
+  .login-card button{width:100%;font:inherit;font-size:13.5px;font-weight:600;padding:10px;border:0;border-radius:6px;background:var(--ink);color:#fff;cursor:pointer}
+  .login-card button:disabled{opacity:.5;cursor:default}
+  .login-error{font-size:12.5px;color:#b3261e;margin-top:12px;min-height:1em}
+  #logout{font:inherit;font-size:12px;color:var(--mute);background:none;border:0;cursor:pointer;margin-left:auto;padding:0}
 </style>
 </head>
 <body>
 <header>
   <h1>Neu.Tail — Admin</h1>
   <a href="/shop.html">&larr; back to shop</a>
+  <button id="logout" style="display:none">Log out</button>
 </header>
-<main>
+
+<div class="login-wrap" id="loginScreen">
+  <div class="login-card">
+    <h2>Admin login</h2>
+    <div class="sub">Enter the admin token to manage session credits, AI access keys, and the catalogue.</div>
+    <form id="loginForm">
+      <label>Admin token</label>
+      <input id="loginToken" type="password" placeholder="x-admin-token" autocomplete="current-password" autofocus>
+      <button id="loginSubmit" type="submit">Log in</button>
+      <div class="login-error" id="loginError"></div>
+    </form>
+  </div>
+</div>
+
+<main id="adminApp" style="display:none">
   <div class="credits-panel">
     <h2>Session credits — approve a turn-limit increase</h2>
     <div class="credits-row">
       <div class="credits-field">
         <label>Session ID</label>
         <input id="c_sessionId" placeholder="web-C001-1234567890">
-      </div>
-      <div class="credits-field">
-        <label>Admin token</label>
-        <input id="c_token" type="password" placeholder="x-admin-token">
       </div>
       <button id="c_lookup">Look up</button>
     </div>
@@ -315,16 +336,61 @@ document.getElementById('save').addEventListener('click', async () => {
   await loadRows();
 });
 
-loadRows();
-
-// Session credits: admin token is remembered locally (never sent anywhere but the
-// x-admin-token header on the grant call below) so an admin doesn't retype it per lookup.
+// Admin login: the token is verified against /admin/verify (a no-side-effect check)
+// before being trusted, then remembered in localStorage so a reload doesn't ask again.
+// Everything else on this page reads it via getToken() rather than holding its own copy.
 const TOKEN_KEY = 'neutail-admin-token';
-const tokenInput = document.getElementById('c_token');
-try { tokenInput.value = localStorage.getItem(TOKEN_KEY) ?? ''; } catch { /* ignore */ }
-tokenInput.addEventListener('change', () => {
-  try { localStorage.setItem(TOKEN_KEY, tokenInput.value); } catch { /* ignore */ }
+const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) ?? ''; } catch { return ''; } };
+const setToken = t => { try { localStorage.setItem(TOKEN_KEY, t); } catch { /* ignore */ } };
+const clearToken = () => { try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ } };
+
+function showAdminApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('adminApp').style.display = '';
+  document.getElementById('logout').style.display = '';
+  loadRows();
+  loadKeys();
+}
+
+function showLoginScreen(error) {
+  document.getElementById('adminApp').style.display = 'none';
+  document.getElementById('logout').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginError').textContent = error ?? '';
+}
+
+async function verifyToken(token) {
+  try {
+    const res = await fetch('/admin/verify', { headers: { 'x-admin-token': token } });
+    return res.ok;
+  } catch { return false; }
+}
+
+document.getElementById('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const submitBtn = document.getElementById('loginSubmit');
+  const token = document.getElementById('loginToken').value;
+  submitBtn.disabled = true;
+  document.getElementById('loginError').textContent = '';
+  const ok = await verifyToken(token);
+  submitBtn.disabled = false;
+  if (!ok) { document.getElementById('loginError').textContent = 'Invalid admin token.'; return; }
+  setToken(token);
+  showAdminApp();
 });
+
+document.getElementById('logout').addEventListener('click', () => {
+  clearToken();
+  document.getElementById('loginToken').value = '';
+  showLoginScreen();
+});
+
+// Silent re-login on reload if a previously-verified token is still stored.
+(async () => {
+  const stored = getToken();
+  if (stored && await verifyToken(stored)) showAdminApp();
+  else { clearToken(); showLoginScreen(); }
+})();
 
 function setCreditsStatus(html, cls) {
   const el = document.getElementById('c_status');
@@ -388,7 +454,7 @@ function shareLinkFor(token) {
 async function loadKeys() {
   setKeysStatus('Loading…');
   try {
-    const res = await fetch('/admin/ai-keys', { headers: { 'x-admin-token': tokenInput.value } });
+    const res = await fetch('/admin/ai-keys', { headers: { 'x-admin-token': getToken() } });
     const d = await res.json();
     if (!res.ok || d.error) { setKeysStatus(`Load failed: ${d.error ?? res.status}`, 'low'); return; }
     const tbody = document.getElementById('k_rows');
@@ -416,7 +482,7 @@ document.getElementById('k_generate').addEventListener('click', async () => {
   setKeysStatus('Generating…');
   try {
     const res = await fetch('/admin/ai-keys', {
-      method: 'POST', headers: { 'x-admin-token': tokenInput.value },
+      method: 'POST', headers: { 'x-admin-token': getToken() },
     });
     const d = await res.json();
     if (!res.ok || d.error) { setKeysStatus(`Generate failed: ${d.error ?? res.status}`, 'low'); return; }
@@ -440,7 +506,7 @@ document.getElementById('k_rows').addEventListener('click', async e => {
     setKeysStatus(`${action === 'activate' ? 'Activating' : 'Deactivating'}…`);
     try {
       const res = await fetch(`/admin/ai-keys/${encodeURIComponent(toggleBtn.dataset.token)}/${action}`, {
-        method: 'POST', headers: { 'x-admin-token': tokenInput.value },
+        method: 'POST', headers: { 'x-admin-token': getToken() },
       });
       const d = await res.json();
       if (!res.ok || d.error) { setKeysStatus(`${action} failed: ${d.error ?? res.status}`, 'low'); return; }
@@ -450,8 +516,6 @@ document.getElementById('k_rows').addEventListener('click', async e => {
     }
   }
 });
-
-loadKeys();
 </script>
 </body>
 </html>
