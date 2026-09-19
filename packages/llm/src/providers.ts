@@ -43,12 +43,22 @@ export async function callAnthropic(apiKey: string, gatewayBase: string | null, 
   };
 }
 
-export async function callOpenAI(apiKey: string, gatewayBase: string | null, model: string, system: string, user: string): Promise<ProviderResult> {
+/**
+ * `temperature` is optional and left unset by the Worker (so the provider default still
+ * applies to every production call, unchanged). The offline eval harness pins it to 0 for
+ * its LLM-judge scorer, where a grader that returns a different verdict on the same input
+ * across runs would make the eval's score meaningless.
+ */
+export async function callOpenAI(apiKey: string, gatewayBase: string | null, model: string, system: string, user: string, temperature?: number): Promise<ProviderResult> {
   const url = gatewayBase ? `${gatewayBase}/openai/chat/completions` : 'https://api.openai.com/v1/chat/completions';
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      ...(temperature === undefined ? {} : { temperature }),
+    }),
   });
   const d = await r.json<any>();
   if (!r.ok) throw new Error(d?.error?.message ?? `openai ${r.status}`);

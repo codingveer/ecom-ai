@@ -1,6 +1,7 @@
 import { Eval } from 'braintrust';
 import { runPrompt } from './lib/harness.js';
 import { coherenceJudge } from './lib/judge.js';
+import { callOpenAI } from '../packages/llm/src/providers.js';
 
 type Case = {
   segment: string; affluence: number; tier: string; aup: number; premium_share: number;
@@ -26,34 +27,66 @@ const cases: Case[] = [
   },
 ];
 
-function noInventedProducts({ output, input }: { output: string; input: Case }) {
+/**
+ * "Never invent products" is a semantic constraint, so it is graded semantically: an LLM
+ * judge is asked, in the way a human reviewer would be, whether the rationale references
+ * any product outside the ones passed in `top`. Three earlier word-overlap heuristics
+ * (pooled known-title words, per-title majority overlap, then an absolute 2-shared-word
+ * floor) all failed here - any bag-of-words threshold either waves through a short
+ * invented name that happens to reuse a generic category word ("Emerald Dress" vs "Silk
+ * Wrap Midi Dress"), or, once tightened enough to catch that, flags ordinary prose that
+ * refers to a real product in shorthand ("The Chinos offer strong value"). A judge
+ * handles paraphrase, shorthand and plurals natively, which is exactly what the
+ * threshold could not.
+ *
+ * Exported so it can be exercised directly against hand-written outputs (both legitimate
+ * prose and fabricated invented-product text) without waiting for the real model to
+ * happen to emit that phrasing.
+ *
+ * The raw-SKU check is kept in front of the judge: it is deterministic, free, and a
+ * SKU-shaped code outside `top` is unambiguously a violation, so there is no reason to
+ * spend a judge call on it.
+ *
+ * Judge settings were chosen by measurement, not taste: the rubric, model and temperature
+ * below were run against 16 hand-written outputs (the legitimate-shorthand prose earlier
+ * rounds wrongly flagged, fabricated invented products, and real captured model outputs),
+ * three times each. gpt-4o at temperature 0 is the combination that scored all 16
+ * correctly with identical verdicts on every repeat; gpt-4o-mini misread "Ruby Cotton
+ * Pleated Tapered Chinos" as a reference to "Cotton Blend Chinos", and leaving temperature
+ * at the provider default made several verdicts flip between runs on the same input.
+ */
+export async function noInventedProducts({ output, input }: { output: string; input: Case }) {
   const known = new Set(input.top.flatMap(p => [p.title, p.sku]));
-  const mentionsUnknownSku = /SKU-\d{5}/g.test(output) && (output.match(/SKU-\d{5}/g) ?? []).some(sku => !known.has(sku));
+  const mentionsUnknownSku = (output.match(/SKU-\d{5}/g) ?? []).some(sku => !known.has(sku));
+  if (mentionsUnknownSku) return { name: 'no_invented_products', score: 0 };
 
-  // Real output references products by name in prose, not by SKU. This catches the
-  // more realistic failure mode: a Title-Case multi-word phrase (a plausible product
-  // name) that isn't substantially the same as any known title. A phrase counts as
-  // "known" only if it shares at least 2 words with some single known title (an
-  // absolute floor, not a percentage) - a percentage-of-phrase-length threshold
-  // degrades to "shares exactly 1 word" for 2-word phrases, which lets an invented
-  // title sharing only a generic category word (e.g. "Emerald Dress" sharing "Dress"
-  // with a real "Silk Wrap Midi Dress") slip through as a false negative. Known titles
-  // shorter than 2 words (not present in this dataset today, but handled for
-  // robustness) fall back to an exact-substring check instead, since a 2-word overlap
-  // floor is impossible to reach against a 1-word title.
-  const titlePhrases = output.match(/\b(?:[A-Z][a-z]+\s+){1,4}[A-Z][a-z]+\b/g) ?? [];
-  const matchesKnownTitle = (phrase: string) => {
-    const words = phrase.split(/\s+/);
-    return input.top.some(p => {
-      const titleWords = p.title.split(/\s+/);
-      if (titleWords.length < 2) return output.includes(p.title);
-      const overlap = words.filter(w => titleWords.includes(w)).length;
-      return overlap >= 2;
-    });
-  };
-  const mentionsUnknownTitle = titlePhrases.some(phrase => !matchesKnownTitle(phrase));
-
-  return { name: 'no_invented_products', score: (mentionsUnknownSku || mentionsUnknownTitle) ? 0 : 1 };
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is required to run evals');
+  const knownTitles = input.top.map(p => `- ${p.title}`).join('\n');
+  const judgePrompt =
+    `A retail assistant explained why a set of products suits a customer. The ONLY ` +
+    `products it is allowed to mention are:\n${knownTitles}\n\n` +
+    `Explanation:\n${output}\n\n` +
+    `Has the assistant invented a product - that is, does the explanation name a ` +
+    `specific product that is none of the allowed ones?\n\n` +
+    `Read it the way a shopper would. Referring to an allowed product loosely - by part ` +
+    `of its name, in a different word order, in the plural, or as "the dress" / "the ` +
+    `option" - is still that product, not an invention. Words quoted from the customer's ` +
+    `own search query, and bare category words, are not product names at all. Only count ` +
+    `a product as invented if it genuinely cannot be any of the allowed ones, because it ` +
+    `carries a colour, material, cut or brand word that no allowed product's name has, ` +
+    `or blends words from two different allowed products into a third.\n\n` +
+    `Answer with exactly one word: "yes" or "no".`;
+  // gpt-4o (not the routing table's class-based pick) and temperature 0 are pinned here
+  // deliberately, so a change to the app's model routing can't silently change how this
+  // eval grades, and so re-running the eval on unchanged output gives the same score.
+  const result = await callOpenAI(
+    apiKey, null, 'gpt-4o',
+    'You are a careful, literal grader. Answer with exactly one word.',
+    judgePrompt, 0,
+  );
+  const invented = /\byes\b/i.test(result.text.trim());
+  return { name: 'no_invented_products', score: invented ? 0 : 1 };
 }
 
 function respectsGuardrail({ output, input }: { output: string; input: Case }) {
