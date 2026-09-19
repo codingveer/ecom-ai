@@ -3,6 +3,7 @@
   "name": "neutail-tools",
   "main": "src/index.ts",
   "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
 
   // No d1_databases entry. This Worker cannot reach the data store; it can only
   // call the services Worker through the contract declared in the registry.
