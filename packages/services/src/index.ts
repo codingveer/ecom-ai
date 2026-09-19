@@ -219,6 +219,18 @@ function expandTerms(raw: string[]): string[] {
   return [...out];
 }
 
+// The seeded catalogue (scripts/lib/fashion-catalog.ts) only covers three departments -
+// women, men, unisex - and eight adult categories. There is no kids/baby range at all, in
+// either the lexical field data or whatever Vectorize indexed from it. A query naming that
+// age group can't be answered by tuning match scores or similarity floors - no amount of
+// embedding-similarity slack makes an adult top a baby garment - so it's called out here as
+// a deterministic short-circuit before either search path runs, rather than letting a vector
+// query's "nearest, however distant" neighbours quietly stand in for a real match.
+const OUT_OF_CATALOGUE_TERMS = new Set([
+  'baby', 'babies', 'infant', 'infants', 'newborn', 'newborns',
+  'toddler', 'toddlers', 'kid', 'kids', 'child', 'children',
+]);
+
 // Word-boundary containment, not raw substring - a plain `includes` lets a term like
 // "men" match inside "women's" (brand text such as "DUKE WOMEN'S ...") and inflates
 // scores for the wrong department entirely. A trailing (')s/es is allowed on the hay
@@ -237,7 +249,7 @@ function hasWord(hay: string, term: string): boolean {
 // floor stays at "some real match happened", not an arbitrary point total.
 const MIN_RELEVANCE = 1;
 
-async function lexicalSearch(env: Env, terms: string[], category: string | null, department: string | undefined, limit: number) {
+async function lexicalSearch(env: Env, rawTerms: string[], category: string | null, department: string | undefined, limit: number) {
   const conditions: string[] = [];
   const binds: string[] = [];
   if (category) { conditions.push('p.category = ?'); binds.push(category); }
@@ -251,17 +263,35 @@ async function lexicalSearch(env: Env, terms: string[], category: string | null,
     FROM products p ${where}`).bind(...binds);
   const { results } = await stmt.all();
 
+  const expanded = expandTerms(rawTerms);
+  // "clothes"/"clothing" are the one deliberate wildcard in SYNONYMS - their expansion
+  // (top/dress/trouser/skirt/jacket/knitwear) is meant to stand in for "anything apparel"
+  // for a generic browse, not to smuggle a real category match past the literal-term gate
+  // below. Every other synonym key still has to earn its match through an actual word hit.
+  const isWildcardBrowse = rawTerms.some(t => t === 'clothes' || t === 'clothing');
+
   return (results as any[]).map(r => {
     const hay = `${r.title} ${r.category} ${r.style_tags} ${r.material} ${r.colour}`.toLowerCase();
+    const styleTags = String(r.style_tags).toLowerCase();
     let score = 0;
-    for (const t of terms) {
-      if (hasWord(hay, t)) score += 2;
-      if (String(r.category).toLowerCase().startsWith(t.replace(/e?s$/, ''))) score += 3;
-      if (hasWord(String(r.style_tags).toLowerCase(), t)) score += 2;
+    // A generic synonym expansion (e.g. "warm" -> coat/jacket/knitwear) matches broad swaths
+    // of the catalogue on its own - useful for boosting a product that's already relevant,
+    // but it can't be what makes a product relevant in the first place. Require at least one
+    // hit that traces back to a word the customer actually typed (unless this is the
+    // deliberate "clothes" wildcard browse above).
+    let literalHit = rawTerms.length === 0 || isWildcardBrowse;
+    for (const t of expanded) {
+      const hayHit = hasWord(hay, t);
+      const catHit = String(r.category).toLowerCase().startsWith(t.replace(/e?s$/, ''));
+      const tagHit = hasWord(styleTags, t);
+      if (hayHit) score += 2;
+      if (catHit) score += 3;
+      if (tagHit) score += 2;
+      if ((hayHit || catHit || tagHit) && rawTerms.includes(t)) literalHit = true;
     }
-    if (terms.length === 0 || score >= MIN_RELEVANCE) score += Number(r.relevance_boost ?? 0);
-    return { ...r, relevance: score };
-  }).filter(r => (terms.length === 0 ? true : r.relevance >= MIN_RELEVANCE) && r.stock > 0)
+    if (literalHit && score >= MIN_RELEVANCE) score += Number(r.relevance_boost ?? 0);
+    return { ...r, relevance: score, literalHit };
+  }).filter(r => r.literalHit && r.relevance >= MIN_RELEVANCE && r.stock > 0)
     .sort((a, b) => b.relevance - a.relevance || b.rating - a.rating)
     .slice(0, limit);
 }
@@ -321,14 +351,20 @@ app.get('/catalogue/search', async c => {
   // and matching every product with "shirt" in the title. Normalise to a single token first.
   const normalizedQ = q.replace(/\bt[\s-]shirt/g, 't-shirt');
   const rawTerms = normalizedQ.split(/\s+/).filter(t => t.length > 1 && !STOP_WORDS.has(t));
-  const terms = expandTerms(rawTerms);
   const searchMode = c.req.query('searchMode') === 'semantic' ? 'semantic' : 'lexical';
+
+  if (rawTerms.some(t => OUT_OF_CATALOGUE_TERMS.has(t))) {
+    return c.json({
+      query: q, candidates: 0, results: [], mode: searchMode,
+      degraded: true, degraded_reason: 'no kids/baby department in this catalogue',
+    });
+  }
 
   if (searchMode === 'semantic') {
     try {
       const results = await semanticSearch(c.env, q, category, department, limit);
       if (!results.length) {
-        const fallback = await lexicalSearch(c.env, terms, category, department, limit);
+        const fallback = await lexicalSearch(c.env, rawTerms, category, department, limit);
         return c.json({
           query: q, candidates: fallback.length, results: fallback, mode: 'lexical', degraded: true,
           degraded_reason: 'no vector matches',
@@ -336,7 +372,7 @@ app.get('/catalogue/search', async c => {
       }
       return c.json({ query: q, candidates: results.length, results, mode: 'semantic' });
     } catch (err) {
-      const results = await lexicalSearch(c.env, terms, category, department, limit);
+      const results = await lexicalSearch(c.env, rawTerms, category, department, limit);
       return c.json({
         query: q, candidates: results.length, results, mode: 'lexical', degraded: true,
         degraded_reason: err instanceof Error ? err.message : 'semantic search unavailable',
@@ -344,7 +380,7 @@ app.get('/catalogue/search', async c => {
     }
   }
 
-  const results = await lexicalSearch(c.env, terms, category, department, limit);
+  const results = await lexicalSearch(c.env, rawTerms, category, department, limit);
   return c.json({ query: q, candidates: results.length, results, mode: 'lexical' });
 });
 
