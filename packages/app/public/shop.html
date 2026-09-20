@@ -2578,9 +2578,33 @@ const CATEGORIES_MEN = [
   { cat: 'accessories', title: 'Bags & Accessories', img: 'https://assets.ajio.com/medias/sys_master/root/20220628/xH2R/62bb258faeb26921af4d99d3/-473Wx593H-4925843070-multi-MODEL.jpg' },
 ];
 
-let customerId = 'C001';
+const CUSTOMER_STORAGE_KEY = 'neutail-selected-customer';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const personaOf = id => PERSONAS.find(p => p.id === id) || null;
+
+function loadStoredCustomer() {
+  try {
+    const url = new URL(window.location.href);
+    const paramCid = url.searchParams.get('customerId');
+    if (paramCid && (PERSONAS.some(p => p.id === paramCid) || paramCid === GUEST_ID)) {
+      try { localStorage.setItem(CUSTOMER_STORAGE_KEY, paramCid); } catch {}
+      return paramCid;
+    }
+  } catch {}
+  try {
+    const stored = localStorage.getItem(CUSTOMER_STORAGE_KEY);
+    if (stored && (PERSONAS.some(p => p.id === stored) || stored === GUEST_ID)) {
+      return stored;
+    }
+  } catch {}
+  return 'C001';
+}
+
+let customerId = loadStoredCustomer();
 let sessionId = 'shop-' + customerId + '-' + Date.now();
-let activeDept = 'women';
+const initialPersona = personaOf(customerId);
+let activeDept = (initialPersona && initialPersona.department) ? initialPersona.department : 'women';
 let currentView = 'home';
 let activeCategory = '';
 let currentSort = 'default';
@@ -2588,10 +2612,6 @@ let cartCount = 0;
 let lastProducts = [];
 let savedSkus = new Set();
 let recommendedProducts = [];
-
-const $ = id => document.getElementById(id);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const personaOf = id => PERSONAS.find(p => p.id === id) || null;
 
 async function ask(text, extra = {}){
   try {
@@ -2657,6 +2677,7 @@ function switchView(viewName, optCategory = null, optParam = null) {
 
 function switchTo(id){
   customerId = id;
+  try { localStorage.setItem(CUSTOMER_STORAGE_KEY, id); } catch {}
   sessionId = 'shop-' + customerId + '-' + Date.now();
   const p = personaOf(id);
   if (p && p.department) {
@@ -2665,12 +2686,13 @@ function switchTo(id){
   chatMessages = [];
   chatActiveProduct = null;
   lastTurnTrace = null;
-  if ($('floatingPersonaBadge') && p) {
-    $('floatingPersonaBadge').textContent = `${p.name} · ${p.id}`;
+  if ($('floatingPersonaBadge')) {
+    $('floatingPersonaBadge').textContent = p ? `${p.name} · ${p.id}` : 'Guest';
   }
   renderAuthArea();
   renderSearchSuggestions();
   renderHomeView();
+  renderChatChips('general');
 
   if (currentView === 'shop') {
     loadRecommendations(true);
@@ -4703,7 +4725,37 @@ function renderChatChips(type) {
       'What is my updated NeuPoints balance?'
     ];
   } else {
-    chips = [
+    const personaChips = {
+      C001: [
+        { text: 'show me a luxury silk evening dress', label: '👗 Luxury Dress' },
+        { text: 'what size should I get?', label: '📏 Size Check' },
+        { text: 'tell me about my VIP loyalty points', label: '✨ NeuPoints' },
+        { text: 'what are my style quests?', label: '✦ Style Quests' },
+        { text: 'check my fit streak', label: '🔥 Fit Streak' }
+      ],
+      C002: [
+        { text: 'show me affordable everyday tops', label: '👕 Budget Tops' },
+        { text: 'what size should I get?', label: '📏 Fit Advisory' },
+        { text: 'give fit consent for recommendations', label: '✓ Fit Consent' },
+        { text: 'what are my style quests?', label: '✦ Quests' },
+        { text: 'check my fit streak', label: '🔥 Fit Streak' }
+      ],
+      C003: [
+        { text: 'start my 3rd styling advisory session', label: '👑 Styling Advisory' },
+        { text: 'show me a cocktail party outfit', label: '🍸 Cocktail Outfit' },
+        { text: 'how many points did I earn?', label: '✨ NeuPoints' },
+        { text: 'what are my style quests?', label: '✦ Quests' },
+        { text: 'check my fit streak', label: '🔥 Fit Streak' }
+      ],
+      C004: [
+        { text: 'show me menswear tailored blazers', label: '👔 Tailored Blazer' },
+        { text: 'what size should I get for outerwear?', label: '📏 Size Check' },
+        { text: 'recommend smart casual chinos', label: '👖 Smart Chinos' },
+        { text: 'what are my style quests?', label: '✦ Quests' },
+        { text: 'check my fit streak', label: '🔥 Fit Streak' }
+      ]
+    };
+    chips = personaChips[customerId] || [
       { text: 'show me an occasion dress', label: '👗 Occasion Dress' },
       { text: 'what size should I get?', label: '📏 Size Check' },
       { text: 'tell me about the styling advisory plan', label: '👑 Styling Plan' },
@@ -4716,8 +4768,15 @@ function renderChatChips(type) {
   bar.innerHTML = chips.map(c => {
     const text = typeof c === 'string' ? c : c.text;
     const label = typeof c === 'string' ? c : (c.label || c.text);
-    return `<button class="chat-flow-chip" onclick="sendChatMessage(${JSON.stringify(text)})">${esc(label)}</button>`;
+    return `<button class="chat-flow-chip" data-chip-text="${esc(text)}">${esc(label)}</button>`;
   }).join('');
+
+  bar.querySelectorAll('.chat-flow-chip').forEach(btn => {
+    btn.onclick = () => {
+      const text = btn.dataset.chipText;
+      if (text) sendChatMessage(text);
+    };
+  });
 }
 
 // Chat Console Event Listeners
@@ -4786,12 +4845,24 @@ function initRouting(){
 window.addEventListener('hashchange', initRouting);
 
 // Boot
+if ($('floatingPersonaBadge')) {
+  const p = personaOf(customerId);
+  $('floatingPersonaBadge').textContent = p ? `${p.name} · ${p.id}` : 'Guest';
+}
 loadCart();
 fetchLoyaltyPoints();
 renderAuthArea();
 syncAiToggle();
 renderSearchSuggestions();
 initRouting();
+
+window.addEventListener('storage', e => {
+  if (e.key === CUSTOMER_STORAGE_KEY && e.newValue && e.newValue !== customerId) {
+    if (PERSONAS.some(p => p.id === e.newValue) || e.newValue === GUEST_ID) {
+      switchTo(e.newValue);
+    }
+  }
+});
 </script>
 </body>
 </html>

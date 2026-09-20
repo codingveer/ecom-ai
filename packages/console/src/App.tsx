@@ -51,6 +51,7 @@ const DEFAULT_SUGGESTIONS = [
 
 const SESSION_STORAGE_KEY = 'neutail-console-session';
 const AI_KEY_STORAGE_KEY = 'neutail-ai-key';
+const CUSTOMER_STORAGE_KEY = 'neutail-selected-customer';
 
 function newSessionId(customerId: string) {
   return 'web-' + customerId + '-' + Date.now();
@@ -116,15 +117,33 @@ function loadInitialSession(): { customerId: string; sessionId: string } {
     const paramCid = url.searchParams.get('customerId');
     if (paramCid && ['C001', 'C002', 'C003', 'C004'].includes(paramCid)) {
       const fresh = { customerId: paramCid, sessionId: newSessionId(paramCid) };
+      try { localStorage.setItem(CUSTOMER_STORAGE_KEY, paramCid); } catch { /* ignore */ }
       try { sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(fresh)); } catch { /* ignore */ }
       return fresh;
     }
   } catch { /* ignore */ }
+
+  let persistedCid: string | null = null;
+  try {
+    const stored = localStorage.getItem(CUSTOMER_STORAGE_KEY);
+    if (stored && ['C001', 'C002', 'C003', 'C004'].includes(stored)) {
+      persistedCid = stored;
+    }
+  } catch { /* ignore */ }
+
   try {
     const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && (!persistedCid || parsed.customerId === persistedCid)) {
+        return parsed;
+      }
+    }
   } catch { /* ignore - storage unavailable or corrupt, fall through to a fresh session */ }
-  const fresh = { customerId: 'C001', sessionId: newSessionId('C001') };
+
+  const targetCid = persistedCid ?? 'C001';
+  const fresh = { customerId: targetCid, sessionId: newSessionId(targetCid) };
+  try { localStorage.setItem(CUSTOMER_STORAGE_KEY, targetCid); } catch { /* ignore */ }
   try { sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(fresh)); } catch { /* ignore */ }
   return fresh;
 }
@@ -456,6 +475,7 @@ export default function App() {
     const fresh = newSessionId(id);
     setCustomerId(id);
     setSessionId(fresh);
+    try { localStorage.setItem(CUSTOMER_STORAGE_KEY, id); } catch { /* ignore */ }
     try { sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ customerId: id, sessionId: fresh })); } catch { /* ignore */ }
   }
 
@@ -470,6 +490,18 @@ export default function App() {
     window.addEventListener('message', handleCustomerMessage);
     return () => window.removeEventListener('message', handleCustomerMessage);
   }, []);
+
+  useEffect(() => {
+    function handleStorageChange(event: StorageEvent) {
+      if (event.key === CUSTOMER_STORAGE_KEY && event.newValue && ['C001', 'C002', 'C003', 'C004'].includes(event.newValue)) {
+        if (event.newValue !== customerId) {
+          switchCustomer(event.newValue);
+        }
+      }
+    }
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [customerId]);
 
   return (
     <>
