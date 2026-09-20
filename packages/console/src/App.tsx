@@ -9,7 +9,38 @@ const PERSONAS = [
   { id: 'C003', name: 'Meera', note: 'free tier, third styling session' },
   { id: 'C004', name: 'Arjun', note: 'menswear department, mid affluence' },
 ];
-const SUGGESTIONS = [
+const PERSONA_SUGGESTIONS: Record<string, { text: string; label: string }[]> = {
+  C001: [
+    { text: 'show me a luxury silk evening dress', label: '👗 Luxury Dress' },
+    { text: 'what size should I get?', label: '📏 Size Check' },
+    { text: 'tell me about my VIP loyalty points', label: '✨ NeuPoints' },
+    { text: 'what are my style quests?', label: '✦ Style Quests' },
+    { text: 'check my fit streak', label: '🔥 Fit Streak' },
+  ],
+  C002: [
+    { text: 'show me affordable everyday tops', label: '👕 Budget Tops' },
+    { text: 'what size should I get?', label: '📏 Fit Advisory' },
+    { text: 'give fit consent for recommendations', label: '✓ Fit Consent' },
+    { text: 'what are my style quests?', label: '✦ Quests' },
+    { text: 'check my fit streak', label: '🔥 Fit Streak' },
+  ],
+  C003: [
+    { text: 'start my 3rd styling advisory session', label: '👑 Styling Advisory' },
+    { text: 'show me a cocktail party outfit', label: '🍸 Cocktail Outfit' },
+    { text: 'how many points did I earn?', label: '✨ NeuPoints' },
+    { text: 'what are my style quests?', label: '✦ Quests' },
+    { text: 'check my fit streak', label: '🔥 Fit Streak' },
+  ],
+  C004: [
+    { text: 'show me menswear tailored blazers', label: '👔 Tailored Blazer' },
+    { text: 'what size should I get for outerwear?', label: '📏 Size Check' },
+    { text: 'recommend smart casual chinos', label: '👖 Smart Chinos' },
+    { text: 'what are my style quests?', label: '✦ Quests' },
+    { text: 'check my fit streak', label: '🔥 Fit Streak' },
+  ],
+};
+
+const DEFAULT_SUGGESTIONS = [
   { text: 'show me an occasion dress', label: '👗 Occasion Dress' },
   { text: 'what size should I get?', label: '📏 Size Check' },
   { text: 'tell me about the styling advisory plan', label: '👑 Styling Plan' },
@@ -328,7 +359,7 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
           })}
         </div>
         <div className="chips">
-          {SUGGESTIONS.map(s => (
+          {(PERSONA_SUGGESTIONS[customerId] || DEFAULT_SUGGESTIONS).map(s => (
             <button key={s.text} className="chip" onClick={() => send(s.text)}>{s.label}</button>
           ))}
         </div>

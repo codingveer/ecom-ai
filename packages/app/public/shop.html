@@ -2669,6 +2669,7 @@ function switchTo(id){
     $('floatingPersonaBadge').textContent = `${p.name} · ${p.id}`;
   }
   renderAuthArea();
+  renderSearchSuggestions();
   renderHomeView();
 
   if (currentView === 'shop') {
@@ -2937,6 +2938,128 @@ async function loadInitialProducts(){
   }
 }
 
+const PERSONA_SEARCH_RECOMMENDATIONS = {
+  C001: {
+    personaName: 'Priya',
+    styleTag: 'Affluent & Luxury Occasionwear',
+    semanticQueries: [
+      'Silk evening dress for a black tie gala',
+      'Luxurious cashmere knitwear for layering',
+      'Tailored wool overcoat for London winter',
+      'Effortless luxury outfit for weekend getaway',
+      'Minimalist designer work blazer'
+    ],
+    trendingKeywords: ['Occasion dress', 'Cashmere jumper', 'Wool coat', 'Silk trousers', 'Saree']
+  },
+  C002: {
+    personaName: 'Aditi',
+    styleTag: 'Smart Value & Capsule Essentials',
+    semanticQueries: [
+      'Affordable versatile dress for daily wear',
+      'Budget-friendly office capsule wardrobe',
+      'Cozy casual knitwear for everyday layering',
+      'Trendy street style staples with great value',
+      'Comfortable trousers for daily commute'
+    ],
+    trendingKeywords: ['Everyday tops', 'Cotton trousers', 'Casual knitwear', 'Day dress', 'Trainers']
+  },
+  C003: {
+    personaName: 'Meera',
+    styleTag: 'Stylist-Curated & Statement Looks',
+    semanticQueries: [
+      'Stylist-curated cocktail party outfit',
+      'Chic day-to-night transitional layering',
+      'Modern statement silhouette for art opening',
+      'Flattering smart-casual styling with accessories',
+      'Bold contemporary midi skirt and top'
+    ],
+    trendingKeywords: ['Party dress', 'Midi skirt', 'Statement top', 'Footwear', 'Accessories']
+  },
+  C004: {
+    personaName: 'Arjun',
+    styleTag: 'Structured Menswear & Tailoring',
+    semanticQueries: [
+      'Sharp tailored blazer for corporate presentation',
+      'Classic structured overcoat for winter commute',
+      'Smart casual chinos with versatile knitwear',
+      'Crisp cotton shirt for business casual dinner',
+      'Weekend heritage jacket and leather footwear'
+    ],
+    trendingKeywords: ['Tailored blazer', 'Oxford shirt', 'Chinos', 'Overcoat', 'Knit jumper']
+  },
+  C000: {
+    personaName: 'Guest',
+    styleTag: 'Trending AI Discovery Assortment',
+    semanticQueries: [
+      'I am looking for warm clothes this winter',
+      'Something elegant for a black tie event',
+      'Comfortable workwear for long days at the office',
+      'Weekend brunch outfit that feels effortless',
+      'A luxury gift for someone who loves fashion'
+    ],
+    trendingKeywords: ['Winter coat', 'Occasion dress', 'Work trousers', 'Trainers', 'Knitwear']
+  }
+};
+
+function renderSearchSuggestions(){
+  const pId = customerId || 'C001';
+  const rec = PERSONA_SEARCH_RECOMMENDATIONS[pId] || PERSONA_SEARCH_RECOMMENDATIONS.C000;
+
+  if ($('suggestionsPersonaName')) $('suggestionsPersonaName').textContent = rec.personaName;
+  if ($('suggestionsPersonaStyle')) $('suggestionsPersonaStyle').textContent = rec.styleTag;
+
+  const pillsContainer = $('searchPillsRow');
+  if (pillsContainer) {
+    pillsContainer.innerHTML = rec.semanticQueries.map(q => `
+      <button class="ai-query-pill" data-query="${esc(q)}" title="Search with AI Mode">
+        <span class="pill-star">✦</span>
+        <span>${esc(q)}</span>
+      </button>
+    `).join('');
+
+    pillsContainer.querySelectorAll('.ai-query-pill').forEach(btn => {
+      btn.onclick = () => {
+        const query = btn.dataset.query;
+        $('searchInput').value = query;
+        $('clearSearch').style.display = 'block';
+        $('aiSearchCheck').checked = true;
+        syncAiToggle();
+        runSearch();
+      };
+    });
+  }
+
+  const trendingContainer = $('trendingKeywordsContainer');
+  if (trendingContainer) {
+    trendingContainer.innerHTML = rec.trendingKeywords.map(k => `
+      <button class="trending-pill" data-keyword="${esc(k)}">${esc(k)}</button>
+    `).join('');
+
+    trendingContainer.querySelectorAll('.trending-pill').forEach(btn => {
+      btn.onclick = () => {
+        const k = btn.dataset.keyword;
+        $('searchInput').value = k;
+        $('clearSearch').style.display = 'block';
+        runSearch();
+      };
+    });
+  }
+}
+
+function syncAiToggle(){
+  const isAi = $('aiSearchCheck').checked;
+  const toggle = $('aiToggleSwitch');
+  if (!toggle) return;
+  toggle.classList.toggle('active', isAi);
+  const textSpan = toggle.querySelector('.ai-toggle-label');
+  if (textSpan) {
+    textSpan.textContent = isAi ? '✦ AI Mode (Hybrid)' : '○ Keyword Only (AI Off)';
+  }
+  toggle.title = isAi
+    ? 'AI Mode enabled: Blends semantic embeddings with lexical search'
+    : 'Keyword search only: AI mode disabled to test exact keyword matching';
+}
+
 async function runSearch(){
   const text = $('searchInput').value.trim();
   if (!text && !activeCategory) return;
@@ -2957,7 +3080,12 @@ function renderProductSkeletons(){
 }
 
 function renderSearchResults(d){
+  const banner = $('searchModeBanner');
+  const isAi = $('aiSearchCheck').checked;
+  const query = $('searchInput').value.trim();
+
   if (d.error) {
+    if (banner) banner.style.display = 'none';
     $('mainProductsGrid').innerHTML = `
       <div style="grid-column:1/-1;text-align:center;padding:60px 20px;">
         <h3 style="font-size:18px;font-weight:600;margin-bottom:8px;">Search Notice</h3>
@@ -2965,12 +3093,76 @@ function renderSearchResults(d){
       </div>`;
     return;
   }
+
+  const modeNote = d.trace?.find(t => t.label?.startsWith('catalogue.search served'));
+  const isDegraded = modeNote?.detail?.degraded;
+  const count = d.payload?.candidates ?? d.payload?.products?.length ?? 0;
+
+  if (banner) {
+    banner.style.display = 'flex';
+    if (isAi) {
+      banner.className = 'search-mode-banner ai-active';
+      banner.innerHTML = `
+        <div>
+          <div class="mode-title">
+            <span>✦ AI Mode Active (Hybrid Search)</span>
+            <span style="font-weight:400;font-size:11px;opacity:0.85;">— ${count} match${count === 1 ? '' : 'es'}</span>
+          </div>
+          <div class="mode-desc">
+            ${isDegraded
+              ? 'Semantic vector query degraded to lexical fallback.'
+              : 'Blends Vectorize semantic embeddings with lexical scoring to capture style concepts, occasions & intent beyond exact keywords.'}
+          </div>
+        </div>
+        <button class="btn-compare-mode" id="toggleModeCompareBtn">Disable AI Mode to Compare ⇄</button>
+      `;
+    } else {
+      banner.className = 'search-mode-banner lexical-active';
+      banner.innerHTML = `
+        <div>
+          <div class="mode-title">
+            <span>○ Keyword Search Only (AI Disabled)</span>
+            <span style="font-weight:400;font-size:11px;opacity:0.85;">— ${count} match${count === 1 ? '' : 'es'}</span>
+          </div>
+          <div class="mode-desc">
+            Restricted to exact word token matches in title or description. Conceptual and semantic context is disabled.
+          </div>
+        </div>
+        <button class="btn-compare-mode" id="toggleModeCompareBtn" style="background:#000;color:#fff;border-color:#000;">Switch to ✦ AI Hybrid Mode</button>
+      `;
+    }
+
+    const compareBtn = $('toggleModeCompareBtn');
+    if (compareBtn) {
+      compareBtn.onclick = () => {
+        $('aiSearchCheck').checked = !isAi;
+        syncAiToggle();
+        runSearch();
+      };
+    }
+  }
+
   if (!d.payload?.products || d.payload.products.length === 0) {
     $('mainProductsGrid').innerHTML = `
-      <div style="grid-column:1/-1;text-align:center;padding:60px 20px;">
-        <h3 style="font-size:18px;font-weight:600;margin-bottom:8px;">No matching styles</h3>
-        <p style="color:var(--mute);">${esc(d.reply || 'Try refining your search terms or picking another category.')}</p>
+      <div style="grid-column:1/-1;text-align:center;padding:50px 20px;background:#f9fafb;border-radius:12px;border:1px dashed #d1d5db;margin-top:10px;">
+        <h3 style="font-size:17px;font-weight:600;margin-bottom:8px;color:#111827;">No matching styles found</h3>
+        <p style="color:var(--mute);max-width:55ch;margin:0 auto 16px;line-height:1.5;">${esc(d.reply || 'Try refining your search terms or picking another category.')}</p>
+        ${!isAi ? `
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px 18px;display:inline-block;max-width:500px;text-align:left;">
+            <div style="font-weight:600;font-size:12px;color:#9a3412;margin-bottom:4px;">💡 Why did this happen?</div>
+            <div style="font-size:12px;color:#4b5563;line-height:1.45;">Standard lexical search requires literal word hits in the catalogue text. Queries like <em>"${esc(query)}"</em> express conceptual intent.</div>
+            <button class="btn-search-submit" style="margin-top:10px;font-size:11px;padding:6px 14px;background:#000;" id="emptyStateAiBtn">✦ Run with AI Semantic Mode</button>
+          </div>
+        ` : ''}
       </div>`;
+    if ($('emptyStateAiBtn')) {
+      $('emptyStateAiBtn').onclick = () => {
+        $('aiSearchCheck').checked = true;
+        syncAiToggle();
+        runSearch();
+      };
+    }
+    $('productCountLabel').textContent = `0 styles found`;
     return;
   }
 
@@ -3076,6 +3268,15 @@ $('clearSearch').onclick = () => {
   $('clearSearch').style.display = 'none';
   $('searchInput').focus();
 };
+if ($('aiSearchCheck')) {
+  $('aiSearchCheck').addEventListener('change', () => {
+    syncAiToggle();
+    const text = $('searchInput').value.trim();
+    if (text || activeCategory) {
+      runSearch();
+    }
+  });
+}
 $('sortDropdown').onchange = (e) => {
   currentSort = e.target.value;
   renderProductGrid();
@@ -4588,6 +4789,8 @@ window.addEventListener('hashchange', initRouting);
 loadCart();
 fetchLoyaltyPoints();
 renderAuthArea();
+syncAiToggle();
+renderSearchSuggestions();
 initRouting();
 </script>
 </body>

@@ -664,21 +664,204 @@
   .ai-toggle-switch {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
+    gap: 8px;
+    padding: 8px 16px;
     border-radius: var(--radius-full);
-    border: 1px solid var(--rule);
+    border: 1.5px solid var(--rule);
     font-size: 12px;
     font-weight: 600;
-    color: var(--mute);
+    color: #4b5563;
     cursor: pointer;
     user-select: none;
-    background: #fff;
+    background: #ffffff;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .ai-toggle-switch:hover {
+    border-color: #000;
+  }
+  .ai-toggle-switch input { display: none; }
+  .ai-toggle-switch.active {
+    background: #09090b;
+    color: #ffffff;
+    border-color: #09090b;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  }
+  .ai-dot-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #9ca3af;
+    transition: all 0.2s ease;
+  }
+  .ai-toggle-switch.active .ai-dot-indicator {
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+  }
+
+  /* Personalized Search Suggestions Box */
+  .search-suggestions-container {
+    background: #fdfdfd;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 13px 18px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  }
+  .search-suggestions-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .suggestions-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #111827;
+  }
+  .suggestions-sparkle {
+    color: #6366f1;
+    font-size: 13px;
+  }
+  .persona-tag {
+    background: #000;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+  }
+  .suggestions-subtext {
+    font-size: 11.5px;
+    color: var(--mute);
+    font-style: italic;
+  }
+  .search-pills-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    margin-bottom: 10px;
+  }
+  .ai-query-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    color: #1f2937;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 13px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .ai-query-pill:hover {
+    border-color: #000;
+    background: #000;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .ai-query-pill .pill-star {
+    color: #8b5cf6;
+    font-size: 11px;
+    transition: color 0.15s;
+  }
+  .ai-query-pill:hover .pill-star {
+    color: #38bdf8;
+  }
+  .trending-keywords-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    padding-top: 8px;
+    border-top: 1px dashed #e5e7eb;
+  }
+  .trending-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    color: #6b7280;
+  }
+  .trending-pill {
+    background: none;
+    border: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: #4b5563;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .trending-pill:hover {
+    color: #000;
+    background: #f3f4f6;
+    text-decoration: underline;
+  }
+
+  /* Search Mode Comparison Banner */
+  .search-mode-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    transition: all 0.2s ease;
+  }
+  .search-mode-banner.ai-active {
+    background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+  }
+  .search-mode-banner.lexical-active {
+    background: linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%);
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+  }
+  .search-mode-banner .mode-title {
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .search-mode-banner .mode-desc {
+    font-size: 11.5px;
+    opacity: 0.9;
+    margin-top: 2px;
+  }
+  .btn-compare-mode {
+    background: #ffffff;
+    border: 1px solid currentColor;
+    color: inherit;
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 16px;
+    cursor: pointer;
     white-space: nowrap;
     transition: all 0.15s;
   }
-  .ai-toggle-switch input { display: none; }
-  .ai-toggle-switch.active { background: #000; color: #fff; border-color: #000; }
+  .btn-compare-mode:hover {
+    background: currentColor;
+    color: #ffffff;
+  }
 
   /* Quick Pills */
   .quick-filters-row {
@@ -2218,11 +2401,32 @@
         <input type="text" id="searchInput" placeholder="Search clothes (e.g. wool coat, silk wrap dress, trousers)..." autocomplete="off">
         <button id="clearSearch" style="display:none;background:none;border:0;cursor:pointer;font-size:16px;color:#999;">×</button>
       </div>
-      <label class="ai-toggle-switch active" id="aiToggleSwitch">
+      <label class="ai-toggle-switch active" id="aiToggleSwitch" title="Toggle AI Mode: Hybrid Vectorize Embeddings + Lexical vs Lexical Keyword Only">
         <input type="checkbox" id="aiSearchCheck" checked>
-        <span>✦ AI Semantic Mode</span>
+        <span class="ai-dot-indicator"></span>
+        <span class="ai-toggle-label">✦ AI Mode (Hybrid)</span>
       </label>
       <button class="btn-search-submit" id="searchSubmitBtn">Search</button>
+    </div>
+
+    <!-- Personalized Quick Search Suggestions (AI Semantic Pills) -->
+    <div class="search-suggestions-container" id="searchSuggestionsBox">
+      <div class="search-suggestions-header">
+        <span class="suggestions-label">
+          <span class="suggestions-sparkle">✦</span>
+          <span>Curated AI Queries for <strong id="suggestionsPersonaName" class="persona-tag">Priya</strong></span>
+        </span>
+        <span class="suggestions-subtext" id="suggestionsPersonaStyle">Affluent & Luxury Occasionwear</span>
+      </div>
+      <div class="search-pills-row" id="searchPillsRow">
+        <!-- Dynamic personalized semantic search pills injected here -->
+      </div>
+      <div class="trending-keywords-row">
+        <span class="trending-label">Trending Terms:</span>
+        <div id="trendingKeywordsContainer" style="display:inline-flex;flex-wrap:wrap;gap:6px;">
+          <!-- Trending keyword pills injected here -->
+        </div>
+      </div>
     </div>
 
     <!-- Category Tabs Filter -->
@@ -2238,6 +2442,9 @@
       <button class="filter-pill" data-cat="footwear">Footwear</button>
       <button class="filter-pill" data-cat="accessories">Accessories</button>
     </div>
+
+    <!-- Search Mode Comparison Banner -->
+    <div id="searchModeBanner" style="display:none;"></div>
 
     <!-- Toolbar -->
     <div class="shop-toolbar">
@@ -2462,6 +2669,7 @@ function switchTo(id){
     $('floatingPersonaBadge').textContent = `${p.name} · ${p.id}`;
   }
   renderAuthArea();
+  renderSearchSuggestions();
   renderHomeView();
 
   if (currentView === 'shop') {
@@ -2730,6 +2938,128 @@ async function loadInitialProducts(){
   }
 }
 
+const PERSONA_SEARCH_RECOMMENDATIONS = {
+  C001: {
+    personaName: 'Priya',
+    styleTag: 'Affluent & Luxury Occasionwear',
+    semanticQueries: [
+      'Silk evening dress for a black tie gala',
+      'Luxurious cashmere knitwear for layering',
+      'Tailored wool overcoat for London winter',
+      'Effortless luxury outfit for weekend getaway',
+      'Minimalist designer work blazer'
+    ],
+    trendingKeywords: ['Occasion dress', 'Cashmere jumper', 'Wool coat', 'Silk trousers', 'Saree']
+  },
+  C002: {
+    personaName: 'Aditi',
+    styleTag: 'Smart Value & Capsule Essentials',
+    semanticQueries: [
+      'Affordable versatile dress for daily wear',
+      'Budget-friendly office capsule wardrobe',
+      'Cozy casual knitwear for everyday layering',
+      'Trendy street style staples with great value',
+      'Comfortable trousers for daily commute'
+    ],
+    trendingKeywords: ['Everyday tops', 'Cotton trousers', 'Casual knitwear', 'Day dress', 'Trainers']
+  },
+  C003: {
+    personaName: 'Meera',
+    styleTag: 'Stylist-Curated & Statement Looks',
+    semanticQueries: [
+      'Stylist-curated cocktail party outfit',
+      'Chic day-to-night transitional layering',
+      'Modern statement silhouette for art opening',
+      'Flattering smart-casual styling with accessories',
+      'Bold contemporary midi skirt and top'
+    ],
+    trendingKeywords: ['Party dress', 'Midi skirt', 'Statement top', 'Footwear', 'Accessories']
+  },
+  C004: {
+    personaName: 'Arjun',
+    styleTag: 'Structured Menswear & Tailoring',
+    semanticQueries: [
+      'Sharp tailored blazer for corporate presentation',
+      'Classic structured overcoat for winter commute',
+      'Smart casual chinos with versatile knitwear',
+      'Crisp cotton shirt for business casual dinner',
+      'Weekend heritage jacket and leather footwear'
+    ],
+    trendingKeywords: ['Tailored blazer', 'Oxford shirt', 'Chinos', 'Overcoat', 'Knit jumper']
+  },
+  C000: {
+    personaName: 'Guest',
+    styleTag: 'Trending AI Discovery Assortment',
+    semanticQueries: [
+      'I am looking for warm clothes this winter',
+      'Something elegant for a black tie event',
+      'Comfortable workwear for long days at the office',
+      'Weekend brunch outfit that feels effortless',
+      'A luxury gift for someone who loves fashion'
+    ],
+    trendingKeywords: ['Winter coat', 'Occasion dress', 'Work trousers', 'Trainers', 'Knitwear']
+  }
+};
+
+function renderSearchSuggestions(){
+  const pId = customerId || 'C001';
+  const rec = PERSONA_SEARCH_RECOMMENDATIONS[pId] || PERSONA_SEARCH_RECOMMENDATIONS.C000;
+
+  if ($('suggestionsPersonaName')) $('suggestionsPersonaName').textContent = rec.personaName;
+  if ($('suggestionsPersonaStyle')) $('suggestionsPersonaStyle').textContent = rec.styleTag;
+
+  const pillsContainer = $('searchPillsRow');
+  if (pillsContainer) {
+    pillsContainer.innerHTML = rec.semanticQueries.map(q => `
+      <button class="ai-query-pill" data-query="${esc(q)}" title="Search with AI Mode">
+        <span class="pill-star">✦</span>
+        <span>${esc(q)}</span>
+      </button>
+    `).join('');
+
+    pillsContainer.querySelectorAll('.ai-query-pill').forEach(btn => {
+      btn.onclick = () => {
+        const query = btn.dataset.query;
+        $('searchInput').value = query;
+        $('clearSearch').style.display = 'block';
+        $('aiSearchCheck').checked = true;
+        syncAiToggle();
+        runSearch();
+      };
+    });
+  }
+
+  const trendingContainer = $('trendingKeywordsContainer');
+  if (trendingContainer) {
+    trendingContainer.innerHTML = rec.trendingKeywords.map(k => `
+      <button class="trending-pill" data-keyword="${esc(k)}">${esc(k)}</button>
+    `).join('');
+
+    trendingContainer.querySelectorAll('.trending-pill').forEach(btn => {
+      btn.onclick = () => {
+        const k = btn.dataset.keyword;
+        $('searchInput').value = k;
+        $('clearSearch').style.display = 'block';
+        runSearch();
+      };
+    });
+  }
+}
+
+function syncAiToggle(){
+  const isAi = $('aiSearchCheck').checked;
+  const toggle = $('aiToggleSwitch');
+  if (!toggle) return;
+  toggle.classList.toggle('active', isAi);
+  const textSpan = toggle.querySelector('.ai-toggle-label');
+  if (textSpan) {
+    textSpan.textContent = isAi ? '✦ AI Mode (Hybrid)' : '○ Keyword Only (AI Off)';
+  }
+  toggle.title = isAi
+    ? 'AI Mode enabled: Blends semantic embeddings with lexical search'
+    : 'Keyword search only: AI mode disabled to test exact keyword matching';
+}
+
 async function runSearch(){
   const text = $('searchInput').value.trim();
   if (!text && !activeCategory) return;
@@ -2750,7 +3080,12 @@ function renderProductSkeletons(){
 }
 
 function renderSearchResults(d){
+  const banner = $('searchModeBanner');
+  const isAi = $('aiSearchCheck').checked;
+  const query = $('searchInput').value.trim();
+
   if (d.error) {
+    if (banner) banner.style.display = 'none';
     $('mainProductsGrid').innerHTML = `
       <div style="grid-column:1/-1;text-align:center;padding:60px 20px;">
         <h3 style="font-size:18px;font-weight:600;margin-bottom:8px;">Search Notice</h3>
@@ -2758,12 +3093,76 @@ function renderSearchResults(d){
       </div>`;
     return;
   }
+
+  const modeNote = d.trace?.find(t => t.label?.startsWith('catalogue.search served'));
+  const isDegraded = modeNote?.detail?.degraded;
+  const count = d.payload?.candidates ?? d.payload?.products?.length ?? 0;
+
+  if (banner) {
+    banner.style.display = 'flex';
+    if (isAi) {
+      banner.className = 'search-mode-banner ai-active';
+      banner.innerHTML = `
+        <div>
+          <div class="mode-title">
+            <span>✦ AI Mode Active (Hybrid Search)</span>
+            <span style="font-weight:400;font-size:11px;opacity:0.85;">— ${count} match${count === 1 ? '' : 'es'}</span>
+          </div>
+          <div class="mode-desc">
+            ${isDegraded
+              ? 'Semantic vector query degraded to lexical fallback.'
+              : 'Blends Vectorize semantic embeddings with lexical scoring to capture style concepts, occasions & intent beyond exact keywords.'}
+          </div>
+        </div>
+        <button class="btn-compare-mode" id="toggleModeCompareBtn">Disable AI Mode to Compare ⇄</button>
+      `;
+    } else {
+      banner.className = 'search-mode-banner lexical-active';
+      banner.innerHTML = `
+        <div>
+          <div class="mode-title">
+            <span>○ Keyword Search Only (AI Disabled)</span>
+            <span style="font-weight:400;font-size:11px;opacity:0.85;">— ${count} match${count === 1 ? '' : 'es'}</span>
+          </div>
+          <div class="mode-desc">
+            Restricted to exact word token matches in title or description. Conceptual and semantic context is disabled.
+          </div>
+        </div>
+        <button class="btn-compare-mode" id="toggleModeCompareBtn" style="background:#000;color:#fff;border-color:#000;">Switch to ✦ AI Hybrid Mode</button>
+      `;
+    }
+
+    const compareBtn = $('toggleModeCompareBtn');
+    if (compareBtn) {
+      compareBtn.onclick = () => {
+        $('aiSearchCheck').checked = !isAi;
+        syncAiToggle();
+        runSearch();
+      };
+    }
+  }
+
   if (!d.payload?.products || d.payload.products.length === 0) {
     $('mainProductsGrid').innerHTML = `
-      <div style="grid-column:1/-1;text-align:center;padding:60px 20px;">
-        <h3 style="font-size:18px;font-weight:600;margin-bottom:8px;">No matching styles</h3>
-        <p style="color:var(--mute);">${esc(d.reply || 'Try refining your search terms or picking another category.')}</p>
+      <div style="grid-column:1/-1;text-align:center;padding:50px 20px;background:#f9fafb;border-radius:12px;border:1px dashed #d1d5db;margin-top:10px;">
+        <h3 style="font-size:17px;font-weight:600;margin-bottom:8px;color:#111827;">No matching styles found</h3>
+        <p style="color:var(--mute);max-width:55ch;margin:0 auto 16px;line-height:1.5;">${esc(d.reply || 'Try refining your search terms or picking another category.')}</p>
+        ${!isAi ? `
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px 18px;display:inline-block;max-width:500px;text-align:left;">
+            <div style="font-weight:600;font-size:12px;color:#9a3412;margin-bottom:4px;">💡 Why did this happen?</div>
+            <div style="font-size:12px;color:#4b5563;line-height:1.45;">Standard lexical search requires literal word hits in the catalogue text. Queries like <em>"${esc(query)}"</em> express conceptual intent.</div>
+            <button class="btn-search-submit" style="margin-top:10px;font-size:11px;padding:6px 14px;background:#000;" id="emptyStateAiBtn">✦ Run with AI Semantic Mode</button>
+          </div>
+        ` : ''}
       </div>`;
+    if ($('emptyStateAiBtn')) {
+      $('emptyStateAiBtn').onclick = () => {
+        $('aiSearchCheck').checked = true;
+        syncAiToggle();
+        runSearch();
+      };
+    }
+    $('productCountLabel').textContent = `0 styles found`;
     return;
   }
 
@@ -2869,6 +3268,15 @@ $('clearSearch').onclick = () => {
   $('clearSearch').style.display = 'none';
   $('searchInput').focus();
 };
+if ($('aiSearchCheck')) {
+  $('aiSearchCheck').addEventListener('change', () => {
+    syncAiToggle();
+    const text = $('searchInput').value.trim();
+    if (text || activeCategory) {
+      runSearch();
+    }
+  });
+}
 $('sortDropdown').onchange = (e) => {
   currentSort = e.target.value;
   renderProductGrid();
@@ -4381,6 +4789,8 @@ window.addEventListener('hashchange', initRouting);
 loadCart();
 fetchLoyaltyPoints();
 renderAuthArea();
+syncAiToggle();
+renderSearchSuggestions();
 initRouting();
 </script>
 </body>
