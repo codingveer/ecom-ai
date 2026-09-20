@@ -10,12 +10,12 @@ const PERSONAS = [
   { id: 'C004', name: 'Arjun', note: 'menswear department, mid affluence' },
 ];
 const SUGGESTIONS = [
-  'show me an occasion dress',
-  'what size should I get?',
-  'tell me about the styling advisory plan',
-  'how many points did I earn?',
-  'what are my style quests?',
-  'check my fit streak',
+  { text: 'show me an occasion dress', label: '👗 Occasion Dress' },
+  { text: 'what size should I get?', label: '📏 Size Check' },
+  { text: 'tell me about the styling advisory plan', label: '👑 Styling Plan' },
+  { text: 'how many points did I earn?', label: '✨ NeuPoints' },
+  { text: 'what are my style quests?', label: '✦ Style Quests' },
+  { text: 'check my fit streak', label: '🔥 Fit Streak' },
 ];
 
 const SESSION_STORAGE_KEY = 'neutail-console-session';
@@ -329,7 +329,7 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
         </div>
         <div className="chips">
           {SUGGESTIONS.map(s => (
-            <button key={s} className="chip" onClick={() => send(s)}>{s}</button>
+            <button key={s.text} className="chip" onClick={() => send(s.text)}>{s.label}</button>
           ))}
         </div>
         <div className="composer">

@@ -4296,18 +4296,20 @@ function renderChatChips(type) {
     ];
   } else {
     chips = [
-      'show me an occasion dress',
-      'what size should I get?',
-      'tell me about the styling advisory plan',
-      'how many points did I earn?',
-      'what are my style quests?',
-      'check my fit streak'
+      { text: 'show me an occasion dress', label: '👗 Occasion Dress' },
+      { text: 'what size should I get?', label: '📏 Size Check' },
+      { text: 'tell me about the styling advisory plan', label: '👑 Styling Plan' },
+      { text: 'how many points did I earn?', label: '✨ NeuPoints' },
+      { text: 'what are my style quests?', label: '✦ Style Quests' },
+      { text: 'check my fit streak', label: '🔥 Fit Streak' }
     ];
   }
 
-  bar.innerHTML = chips.map(c => `
-    <button class="chat-flow-chip" onclick="sendChatMessage(${JSON.stringify(c)})">${esc(c)}</button>
-  `).join('');
+  bar.innerHTML = chips.map(c => {
+    const text = typeof c === 'string' ? c : c.text;
+    const label = typeof c === 'string' ? c : (c.label || c.text);
+    return `<button class="chat-flow-chip" onclick="sendChatMessage(${JSON.stringify(text)})">${esc(label)}</button>`;
+  }).join('');
 }
 
 // Chat Console Event Listeners

@@ -208,8 +208,11 @@ export class SessionAgent extends AIChatAgent<Env> {
         session.working.lastProducts = r.products.map((p: any) => p.sku);
         session.working.lastSku = r.products[0]?.sku ?? session.working.lastSku ?? null;
         session.working.lastCategory = category ?? r.products[0]?.category ?? null;
+        const productRows = (r.products || []).map((p: any, i: number) =>
+          `• **${i + 1}. ${p.title}** · £${Number(p.price_gbp).toFixed(2)} \`${p.price_tier}\``
+        ).join('\n');
         reply = r.products.length
-          ? `${r.rationale}\n\n` + r.products.map((p: any, i: number) => `${i + 1}. ${p.title} - GBP ${p.price_gbp} (${p.price_tier})`).join('\n')
+          ? `✨ **Curated Selection for You**\n\n_${r.rationale}_\n\n${productRows}`
           : r.rationale;
         break;
       }
@@ -219,10 +222,13 @@ export class SessionAgent extends AIChatAgent<Env> {
         trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Size & Fit Agent', detail: { sku, category }, m3_ref: 'S3.4' });
         const r = await fit.recommend(mk('fit'), customerId, sku, category);
         payload = r;
-        reply = r.explanation;
-        if (!r.abstained) {
-          reply += `\n\nRecommended size ${r.recommended_size} at ${r.confidence}% confidence`
-            + (r.size_in_stock ? '.' : ' - currently out of stock in that size.');
+        if (r.abstained) {
+          reply = `📏 **Size & Fit Advisory**\n\n• **Status:** No measurements on file (consent not given).\n• **Guidance:** ${r.explanation}\n\n_Interactive size charts and virtual try-on are available._`;
+        } else {
+          reply = `📏 **Recommended Size: ${r.recommended_size}** (${r.confidence}% confidence)\n\n`
+            + `• **Fit Evaluation:** ${r.explanation}\n`
+            + `• **Stock Status:** ${r.size_in_stock ? 'In stock in your recommended size' : 'Currently out of stock in size ' + r.recommended_size}\n\n`
+            + `_Verified fit selection protects your Zero-Return Fit Streak._`;
           session.working.lastCategory = r.category;
         }
         break;
@@ -235,18 +241,27 @@ export class SessionAgent extends AIChatAgent<Env> {
           const sub = await upsell.accept(uk, customerId, session.working.pendingOffer!.tier);
           session.working.pendingOffer = null;
           payload = { accepted: true, subscription: sub };
-          reply = `You are on ${sub.tier} at GBP ${sub.price_gbp_month} a month. The entitlement is live now, including 2x loyalty accrual.`;
+          reply = `🎉 **Welcome to Plus!**\n\n`
+            + `• **Plan:** ${sub.tier.toUpperCase()} (£${sub.price_gbp_month}/month)\n`
+            + `• **Entitlement:** 2× NeuPoints accrual multiplier active immediately\n`
+            + `• **Next Steps:** Ask for capsule wardrobe recommendations or explore your style quests!`;
         } else {
           trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Upsell Agent', m3_ref: 'S4.4' });
           const r = await upsell.evaluate(uk, customerId);
           payload = r;
           if (r.offer) {
             session.working.pendingOffer = { tier: r.offer.tier, price: r.offer.price_gbp_month };
-            reply = `${r.offer.copy}\n\nReply "accept" to switch to Plus at GBP ${r.offer.price_gbp_month} a month.`;
+            reply = `✨ **Atelier Styling Advisory Plus** · £${r.offer.price_gbp_month}/month\n\n`
+              + `${r.offer.copy}\n\n`
+              + `• **1:1 Concierge:** Consultations with senior stylists\n`
+              + `• **Capsule Curation:** Personalized wardrobe curation & fit verification\n`
+              + `• **Loyalty Acceleration:** 2× NeuPoints accrual multiplier\n\n`
+              + `Reply **"accept"** to switch to Plus at £${r.offer.price_gbp_month}/month.`;
           } else {
-            reply = r.reason === 'suppressed_by_policy' ? `No offer shown. ${r.policy?.detail}`
+            const detail = r.reason === 'suppressed_by_policy' ? r.policy?.detail
               : r.reason === 'already_subscribed' ? `You are already on ${r.entitlement}, so there is nothing to upgrade.`
               : `Styling Advisory has been used ${r.usage.sessions} time(s). No offer is made before the third session.`;
+            reply = `👑 **Styling Advisory Status**\n\n• ${detail}`;
           }
         }
         break;
