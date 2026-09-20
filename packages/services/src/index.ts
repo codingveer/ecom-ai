@@ -227,22 +227,49 @@ app.post('/orders/checkout', async c => {
   }
 
   // 3. Loyalty Points Accrual & Redemption
-  const sub = await c.env.DB.prepare(`SELECT tier FROM subscriptions WHERE customer_id = ?`).bind(customer_id).first<{ tier: string }>();
-  const multiplier = sub?.tier && sub.tier !== 'free' ? 2 : 1;
-  const basePoints = Math.round(finalTotal);
-  const awardedPoints = Math.round(basePoints * multiplier);
-
   let loyaltyAccount = await c.env.DB.prepare(`SELECT * FROM loyalty_accounts WHERE customer_id = ?`).bind(customer_id).first<any>();
   if (!loyaltyAccount) {
     loyaltyAccount = {
       customer_id, tier: 'Bronze', points_balance: 0, lifetime_points: 0,
       engagement_score: 0.5, points_to_next_tier: 1500,
+      fit_streak: 0, fit_streak_multiplier: 1.0, badges: '[]', quests: '[]',
     };
     await c.env.DB.prepare(`
-      INSERT INTO loyalty_accounts (customer_id, tier, points_balance, lifetime_points, engagement_score, points_to_next_tier)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(customer_id, 'Bronze', 0, 0, 0.5, 1500).run();
+      INSERT INTO loyalty_accounts (customer_id, tier, points_balance, lifetime_points, engagement_score, points_to_next_tier, fit_streak, fit_streak_multiplier, badges, quests)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(customer_id, 'Bronze', 0, 0, 0.5, 1500, 0, 1.0, '[]', '[]').run();
   }
+
+  const sub = await c.env.DB.prepare(`SELECT tier FROM subscriptions WHERE customer_id = ?`).bind(customer_id).first<{ tier: string }>();
+  const subMultiplier = sub?.tier && sub.tier !== 'free' ? 2 : 1;
+  const streakMultiplier = Number(loyaltyAccount.fit_streak_multiplier) || 1.0;
+  const combinedMultiplier = r2(subMultiplier * streakMultiplier);
+
+  // Advance fit streak on verified order
+  const newFitStreak = (Number(loyaltyAccount.fit_streak) || 0) + 1;
+  const newStreakMultiplier = newFitStreak >= 5 ? 2.0 : newFitStreak >= 3 ? 1.5 : newFitStreak >= 2 ? 1.25 : 1.0;
+
+  // Evaluate active quests against cart items
+  let questsList: any[] = [];
+  try { questsList = JSON.parse(loyaltyAccount.quests || '[]'); } catch { questsList = []; }
+  let questBonusPoints = 0;
+  let questCompletedTitle = '';
+  for (const q of questsList) {
+    if (q.status === 'active') {
+      const matchCat = !q.category || items.some((it: any) => it.category === q.category);
+      if (matchCat) {
+        q.progress = Math.min(q.target, (q.progress || 0) + 1);
+        if (q.progress >= q.target) {
+          q.status = 'completed';
+          questBonusPoints += (q.reward_points || 0);
+          questCompletedTitle = q.title;
+        }
+      }
+    }
+  }
+
+  const basePoints = Math.round(finalTotal);
+  const awardedPoints = Math.round(basePoints * combinedMultiplier) + questBonusPoints;
 
   const redeemed = Math.min(loyaltyAccount.points_balance, Math.max(0, Number(points_redeemed) || 0));
   const newBalance = loyaltyAccount.points_balance - redeemed + awardedPoints;
@@ -254,9 +281,10 @@ app.post('/orders/checkout', async c => {
 
   await c.env.DB.prepare(`
     UPDATE loyalty_accounts
-    SET points_balance = ?, lifetime_points = ?, tier = ?, points_to_next_tier = ?, engagement_score = ?
+    SET points_balance = ?, lifetime_points = ?, tier = ?, points_to_next_tier = ?, engagement_score = ?,
+        fit_streak = ?, fit_streak_multiplier = ?, quests = ?
     WHERE customer_id = ?
-  `).bind(newBalance, lifetime, newTier, pointsToNext, newEngagement, customer_id).run();
+  `).bind(newBalance, lifetime, newTier, pointsToNext, newEngagement, newFitStreak, newStreakMultiplier, JSON.stringify(questsList), customer_id).run();
 
   // 4. Record event
   const eventId = `EV-ORD-${Date.now()}-${Math.floor(Math.random() * 1e4)}`;
@@ -266,6 +294,7 @@ app.post('/orders/checkout', async c => {
   `).bind(eventId, customer_id, placedAt, 'order_placed', JSON.stringify({
     order_id: orderId, total_gbp: finalTotal, items_count: items.length,
     awarded_points: awardedPoints, redeemed_points: redeemed, new_tier: newTier,
+    fit_streak: newFitStreak, quest_completed: questCompletedTitle || null,
   })).run();
 
   return c.json({
@@ -279,9 +308,14 @@ app.post('/orders/checkout', async c => {
       points_redeemed: redeemed,
       balance: newBalance,
       tier: newTier,
-      multiplier,
+      multiplier: combinedMultiplier,
+      subscription_multiplier: subMultiplier,
+      fit_streak_multiplier: newStreakMultiplier,
+      fit_streak: newFitStreak,
       tier_upgraded: newTier !== loyaltyAccount.tier,
       points_to_next_tier: pointsToNext,
+      quest_completed: questCompletedTitle || null,
+      quest_bonus_points: questBonusPoints,
     },
   });
 });
@@ -749,8 +783,72 @@ app.post('/fit/:customerId/observation', async c => {
 
 // ---------------------------------------------------------- Loyalty
 app.get('/loyalty/:customerId', async c => {
-  const row = await c.env.DB.prepare(`SELECT * FROM loyalty_accounts WHERE customer_id = ?`).bind(c.req.param('customerId')).first();
-  return row ? c.json(row) : c.json({ error: 'account_not_found' }, 404);
+  const row = await c.env.DB.prepare(`SELECT * FROM loyalty_accounts WHERE customer_id = ?`).bind(c.req.param('customerId')).first<any>();
+  if (!row) return c.json({ error: 'account_not_found' }, 404);
+  return c.json({
+    ...row,
+    fit_streak: Number(row.fit_streak ?? 0),
+    fit_streak_multiplier: Number(row.fit_streak_multiplier ?? 1.0),
+    badges: typeof row.badges === 'string' ? JSON.parse(row.badges || '[]') : (row.badges ?? []),
+    quests: typeof row.quests === 'string' ? JSON.parse(row.quests || '[]') : (row.quests ?? []),
+  });
+});
+
+app.get('/loyalty/:customerId/quests', async c => {
+  const id = c.req.param('customerId');
+  const a = await c.env.DB.prepare(`SELECT quests, badges, points_balance, tier FROM loyalty_accounts WHERE customer_id = ?`).bind(id).first<any>();
+  if (!a) return c.json({ error: 'account_not_found' }, 404);
+  const quests = typeof a.quests === 'string' ? JSON.parse(a.quests || '[]') : (a.quests ?? []);
+  const badges = typeof a.badges === 'string' ? JSON.parse(a.badges || '[]') : (a.badges ?? []);
+  return c.json({ customer_id: id, quests, badges, balance: a.points_balance, tier: a.tier });
+});
+
+app.post('/loyalty/:customerId/quests/update', async c => {
+  const id = c.req.param('customerId');
+  const { quest_id, action = 'progress', progress_delta = 1 } = await c.req.json<any>();
+  const a = await c.env.DB.prepare(`SELECT * FROM loyalty_accounts WHERE customer_id = ?`).bind(id).first<any>();
+  if (!a) return c.json({ error: 'account_not_found' }, 404);
+  let quests = typeof a.quests === 'string' ? JSON.parse(a.quests || '[]') : (a.quests ?? []);
+  let badges = typeof a.badges === 'string' ? JSON.parse(a.badges || '[]') : (a.badges ?? []);
+  let bonusAwarded = 0;
+  const targetQuest = quests.find((q: any) => q.id === quest_id);
+  if (targetQuest) {
+    if (action === 'progress') {
+      targetQuest.progress = Math.min(targetQuest.target, (targetQuest.progress || 0) + progress_delta);
+      if (targetQuest.progress >= targetQuest.target && targetQuest.status === 'active') {
+        targetQuest.status = 'completed';
+        bonusAwarded = targetQuest.reward_points || 0;
+        if (targetQuest.badge && !badges.includes(targetQuest.badge)) badges.push(targetQuest.badge);
+      }
+    } else if (action === 'claim' && targetQuest.status === 'completed') {
+      targetQuest.status = 'claimed';
+    }
+  }
+  const newBalance = a.points_balance + bonusAwarded;
+  await c.env.DB.prepare(`UPDATE loyalty_accounts SET quests = ?, badges = ?, points_balance = ? WHERE customer_id = ?`)
+    .bind(JSON.stringify(quests), JSON.stringify(badges), newBalance, id).run();
+  return c.json({ ok: true, quests, badges, points_awarded: bonusAwarded, balance: newBalance });
+});
+
+app.get('/loyalty/:customerId/streak', async c => {
+  const id = c.req.param('customerId');
+  const a = await c.env.DB.prepare(`SELECT * FROM loyalty_accounts WHERE customer_id = ?`).bind(id).first<any>();
+  if (!a) return c.json({ error: 'account_not_found' }, 404);
+  const streak = Number(a.fit_streak ?? 0);
+  const multiplier = Number(a.fit_streak_multiplier ?? 1.0);
+  const badges = typeof a.badges === 'string' ? JSON.parse(a.badges || '[]') : (a.badges ?? []);
+  return c.json({
+    customer_id: id,
+    fit_streak: streak,
+    fit_streak_multiplier: multiplier,
+    badges,
+    estimated_reverse_logistics_saved_gbp: r2(streak * 14.5),
+    estimated_co2_kg_saved: r2(streak * 2.4),
+    next_milestone: streak < 2 ? { target: 2, multiplier: 1.25, badge: 'Fit Explorer' }
+      : streak < 3 ? { target: 3, multiplier: 1.5, badge: 'Fit Master' }
+      : streak < 5 ? { target: 5, multiplier: 2.0, badge: 'Zero-Return Champion' }
+      : { target: 10, multiplier: 2.5, badge: 'Sustainable Wardrobe Icon' },
+  });
 });
 
 app.post('/loyalty/:customerId/accrue', async c => {
@@ -758,14 +856,17 @@ app.post('/loyalty/:customerId/accrue', async c => {
   const { base_points, multiplier = 1, reason = 'purchase' } = await c.req.json<any>();
   const a = await c.env.DB.prepare(`SELECT * FROM loyalty_accounts WHERE customer_id = ?`).bind(id).first<any>();
   if (!a) return c.json({ error: 'account_not_found' }, 404);
-  const awarded = Math.round(Number(base_points) * Number(multiplier));
+  const streakMult = Number(a.fit_streak_multiplier) || 1.0;
+  const effectiveMultiplier = r2(Number(multiplier) * streakMult);
+  const awarded = Math.round(Number(base_points) * effectiveMultiplier);
   const lifetime = a.lifetime_points + awarded;
   const tier = lifetime > 9000 ? 'Platinum' : lifetime > 4500 ? 'Gold' : lifetime > 1500 ? 'Silver' : 'Bronze';
   const next = tier === 'Platinum' ? lifetime : tier === 'Gold' ? 9000 : tier === 'Silver' ? 4500 : 1500;
   await c.env.DB.prepare(`UPDATE loyalty_accounts SET points_balance=?, lifetime_points=?, tier=?, points_to_next_tier=?, engagement_score=? WHERE customer_id=?`)
     .bind(a.points_balance + awarded, lifetime, tier, Math.max(0, next - lifetime), Math.min(1, a.engagement_score + 0.02), id).run();
   return c.json({
-    awarded, multiplier, reason, balance: a.points_balance + awarded, tier,
+    awarded, multiplier: effectiveMultiplier, subscription_multiplier: multiplier, fit_streak_multiplier: streakMult,
+    fit_streak: a.fit_streak, reason, balance: a.points_balance + awarded, tier,
     tier_changed: tier !== a.tier, points_to_next_tier: Math.max(0, next - lifetime),
     liability_gbp: r2(awarded * 0.01),
   });
@@ -865,5 +966,10 @@ app.get('/analytics/fit-coverage', async c => {
 });
 
 app.get('/health', c => c.json({ ok: true, service: 'services', platform: 'cloudflare-workers+d1' }));
+
+app.onError((err, c) => {
+  console.error('services error', c.req.method, c.req.path, err);
+  return c.json({ error: 'internal_error', detail: String(err) }, 500);
+});
 
 export default app;

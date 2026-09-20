@@ -279,6 +279,14 @@ app.get('/api/customers/:id/orders', async c => {
   } catch (e) { return c.json({ error: String(e) }, 502); }
 });
 
+app.get('/api/tools', async c => {
+  try {
+    const qs = c.req.url.includes('?') ? '?' + c.req.url.split('?')[1] : '';
+    const r = await c.env.TOOLS.fetch(`https://tools.internal/tools${qs}`);
+    return new Response(r.body, r);
+  } catch (e) { return c.json({ error: String(e) }, 502); }
+});
+
 app.all('*', c => c.env.ASSETS.fetch(c.req.raw));
 
 export default app;

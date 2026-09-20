@@ -38,7 +38,11 @@ CREATE TABLE loyalty_accounts (
   points_balance INTEGER NOT NULL,
   lifetime_points INTEGER NOT NULL,
   engagement_score REAL NOT NULL,
-  points_to_next_tier INTEGER NOT NULL
+  points_to_next_tier INTEGER NOT NULL,
+  fit_streak INTEGER NOT NULL DEFAULT 0,
+  fit_streak_multiplier REAL NOT NULL DEFAULT 1.0,
+  badges TEXT NOT NULL DEFAULT '[]',
+  quests TEXT NOT NULL DEFAULT '[]'
 );
 
 CREATE TABLE products (

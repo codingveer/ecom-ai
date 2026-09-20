@@ -621,7 +621,12 @@ export const BUNDLED: ToolContract[] = [
     },
     "output_schema": {
       "tier": "string",
-      "points_balance": "integer"
+      "points_balance": "integer",
+      "points_to_next_tier": "integer",
+      "fit_streak": "integer",
+      "fit_streak_multiplier": "number",
+      "badges": "array",
+      "quests": "array"
     },
     "transport": {
       "service": "services",
@@ -668,6 +673,33 @@ export const BUNDLED: ToolContract[] = [
     }
   },
   {
+    "name": "loyalty.quests.get",
+    "version": "1.0.0",
+    "purpose": "Fetch customer's active and completed gamified style missions, rewards, and unlocked badges.",
+    "allowed_agents": [
+      "loyalty",
+      "orchestrator"
+    ],
+    "input_schema": {
+      "customer_id": {
+        "type": "string",
+        "required": true
+      }
+    },
+    "output_schema": {
+      "customer_id": "string",
+      "quests": "array",
+      "badges": "array",
+      "balance": "integer",
+      "tier": "string"
+    },
+    "transport": {
+      "service": "services",
+      "method": "GET",
+      "path": "/loyalty/{customer_id}/quests"
+    }
+  },
+  {
     "name": "loyalty.redeem",
     "version": "1.0.0",
     "purpose": "Redeem points against a reward and release the point liability.",
@@ -692,6 +724,35 @@ export const BUNDLED: ToolContract[] = [
       "service": "services",
       "method": "POST",
       "path": "/loyalty/{customer_id}/redeem"
+    }
+  },
+  {
+    "name": "loyalty.streak.get",
+    "version": "1.0.0",
+    "purpose": "Fetch zero-return fit streak metrics, return-reduction multiplier, and sustainability impact.",
+    "allowed_agents": [
+      "loyalty",
+      "orchestrator"
+    ],
+    "input_schema": {
+      "customer_id": {
+        "type": "string",
+        "required": true
+      }
+    },
+    "output_schema": {
+      "customer_id": "string",
+      "fit_streak": "integer",
+      "fit_streak_multiplier": "number",
+      "badges": "array",
+      "estimated_reverse_logistics_saved_gbp": "number",
+      "estimated_co2_kg_saved": "number",
+      "next_milestone": "object"
+    },
+    "transport": {
+      "service": "services",
+      "method": "GET",
+      "path": "/loyalty/{customer_id}/streak"
     }
   },
   {

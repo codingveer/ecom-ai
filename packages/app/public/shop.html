@@ -138,46 +138,85 @@
   }
   .header-action-link:hover { color: #000; }
 
+  #authContainer {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
   .persona-selector-btn {
     display: flex;
     align-items: center;
     gap: 7px;
     background: #ffffff;
     border: 1px solid var(--rule);
-    padding: 6px 12px;
+    padding: 7px 13px;
     border-radius: var(--radius-full);
     font: inherit;
     font-size: 12.5px;
     font-weight: 600;
     color: var(--ink);
     cursor: pointer;
-    transition: all 0.15s;
+    user-select: none;
+    transition: all 0.15s ease;
   }
-  .persona-selector-btn:hover { border-color: #999; }
-  .persona-indicator { width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); }
+  .persona-selector-btn:hover {
+    border-color: #888;
+    background: #fbfbfb;
+  }
+  .persona-selector-btn:focus-visible {
+    outline: 2px solid #000;
+    outline-offset: 2px;
+  }
+  .persona-selector-btn * {
+    pointer-events: none;
+  }
+  .persona-indicator {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--emerald);
+    flex-shrink: 0;
+  }
 
   .account-dropdown {
     position: absolute;
-    top: 48px;
-    right: 90px;
+    top: calc(100% + 8px);
+    right: 0;
     background: #ffffff;
     border: 1px solid var(--rule);
     border-radius: var(--radius-md);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-    min-width: 240px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+    min-width: 260px;
     padding: 8px;
     display: none;
-    z-index: 50;
+    z-index: 100;
   }
-  .account-dropdown.open { display: block; }
-  .dropdown-title { padding: 8px 12px 6px; font-size: 10.5px; color: var(--mute); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  .account-dropdown.open {
+    display: block;
+    animation: fadeInDropdown 0.15s ease-out;
+  }
+  @keyframes fadeInDropdown {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .dropdown-title {
+    padding: 8px 12px 6px;
+    font-size: 10.5px;
+    color: var(--mute);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    user-select: none;
+  }
   .account-dropdown button {
     display: flex;
     align-items: center;
     justify-content: space-between;
     width: 100%;
     text-align: left;
-    padding: 9px 12px;
+    padding: 10px 12px;
     border: 0;
     background: none;
     border-radius: var(--radius-sm);
@@ -186,10 +225,23 @@
     font-weight: 500;
     color: var(--ink);
     cursor: pointer;
+    user-select: none;
     transition: background 0.12s;
   }
-  .account-dropdown button:hover { background: var(--canvas); }
-  .account-dropdown .divider { border-top: 1px solid var(--rule); margin: 6px 4px; }
+  .account-dropdown button:hover {
+    background: var(--canvas);
+  }
+  .account-dropdown button:focus-visible {
+    outline: 2px solid #000;
+    outline-offset: -2px;
+  }
+  .account-dropdown button * {
+    pointer-events: none;
+  }
+  .account-dropdown .divider {
+    border-top: 1px solid var(--rule);
+    margin: 6px 4px;
+  }
 
   .cart-btn {
     display: flex;
@@ -2405,12 +2457,15 @@ function renderAuthArea(){
   const p = personaOf(customerId);
   const container = $('authContainer');
   if (!p) {
-    container.innerHTML = `<button id="signInTrigger" class="persona-selector-btn"><span class="persona-indicator" style="background:#999"></span> Sign In</button>`;
-    $('signInTrigger').onclick = openSignIn;
+    container.innerHTML = `<button id="signInTrigger" class="persona-selector-btn" title="Select a demo persona"><span class="persona-indicator" style="background:#999"></span> Sign In</button>`;
+    $('signInTrigger').onclick = (e) => {
+      e.stopPropagation();
+      openSignIn();
+    };
     return;
   }
   container.innerHTML = `
-    <button id="personaDropdownToggle" class="persona-selector-btn">
+    <button id="personaDropdownToggle" class="persona-selector-btn" aria-haspopup="true" aria-expanded="false" title="Switch active persona">
       <span class="persona-indicator"></span>
       <span>${esc(p.name)}</span>
       <span style="font-size:9px;color:var(--mute)">▾</span>
@@ -2418,30 +2473,62 @@ function renderAuthArea(){
     <div class="account-dropdown" id="accountDropdown">
       <div class="dropdown-title">Switch Persona</div>
       ${PERSONAS.map(x => `
-        <button data-switch="${x.id}" style="${x.id === p.id ? 'font-weight:700;background:var(--rule-subtle)' : ''}">
-          <span>${esc(x.name)}</span>
+        <button data-switch="${x.id}" style="${x.id === p.id ? 'font-weight:700;background:var(--rule-subtle);' : ''}">
+          <span style="display:inline-flex;align-items:center;gap:6px;">
+            ${x.id === p.id ? '<span style="color:var(--emerald);font-size:10px;">●</span>' : '<span style="opacity:0;font-size:10px;">●</span>'}
+            <span>${esc(x.name)}</span>
+          </span>
           <span style="font-size:11px;color:var(--mute)">${esc(x.segment)}</span>
         </button>`).join('')}
       <div class="divider"></div>
       <button id="signOutTrigger"><span style="color:#dc2626">Guest Mode</span></button>
     </div>`;
 
-  $('personaDropdownToggle').onclick = () => $('accountDropdown').classList.toggle('open');
+  const toggle = $('personaDropdownToggle');
+  const dd = $('accountDropdown');
+
+  toggle.onclick = (e) => {
+    e.stopPropagation();
+    const isOpen = dd.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  };
+
   container.querySelectorAll('[data-switch]').forEach(b => {
-    b.onclick = () => {
-      $('accountDropdown').classList.remove('open');
+    b.onclick = (e) => {
+      e.stopPropagation();
+      dd.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false');
       switchTo(b.dataset.switch);
     };
   });
-  $('signOutTrigger').onclick = () => {
-    $('accountDropdown').classList.remove('open');
+
+  $('signOutTrigger').onclick = (e) => {
+    e.stopPropagation();
+    dd.classList.remove('open');
+    toggle.setAttribute('aria-expanded', 'false');
     switchTo(GUEST_ID);
   };
 }
+
 document.addEventListener('click', e => {
-  const dd = $('accountDropdown'); const toggle = $('personaDropdownToggle');
-  if (dd && dd.classList.contains('open') && !dd.contains(e.target) && e.target !== toggle) {
-    dd.classList.remove('open');
+  const dd = $('accountDropdown');
+  const toggle = $('personaDropdownToggle');
+  if (dd && dd.classList.contains('open')) {
+    if (!dd.contains(e.target) && (!toggle || !toggle.contains(e.target))) {
+      dd.classList.remove('open');
+      if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    }
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const dd = $('accountDropdown');
+    const toggle = $('personaDropdownToggle');
+    if (dd && dd.classList.contains('open')) {
+      dd.classList.remove('open');
+      if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    }
   }
 });
 
@@ -3704,10 +3791,54 @@ async function renderAccountView(){
         </div>
       </div>
 
+      <!-- Gamified Loyalty, Fit Streak & AI Style Quests -->
       <div style="border:1px solid var(--rule);padding:24px;border-radius:var(--radius-sm);background:#fff;margin-bottom:24px;">
-        <h4 style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--mute);margin:0 0 12px;">Loyalty Multiplier & NeuPoints</h4>
-        <div id="acctLoyaltyText" style="font-size:14px;">Loading loyalty balance…</div>
-        <button class="btn-outline" style="margin-top:12px;padding:8px 16px;font-size:11.5px;" id="simAcctPurchase">Simulate Purchase (+Loyalty Accrual)</button>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+          <div>
+            <h4 style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--mute);margin:0 0 4px;">Loyalty Multiplier & AI Gamification</h4>
+            <div style="font-size:13px;color:var(--mute);">Powered by Agent #5 (Loyalty Accrual) & Cross-Agent Shared Memory</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-outline" style="padding:6px 12px;font-size:11.5px;" id="askQuestsBtn">✦ Ask AI Questmaster</button>
+            <button class="btn-outline" style="padding:6px 12px;font-size:11.5px;" id="checkStreakBtn">🔥 Check Fit Streak</button>
+            <button class="btn-outline" style="padding:6px 12px;font-size:11.5px;" id="simAcctPurchase">Simulate Accrual</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;">
+          <!-- Points & Accrual Rate -->
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:var(--radius-sm);padding:16px;">
+            <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:#b45309;letter-spacing:.05em;">NeuPoints Balance & Rate</div>
+            <div id="acctPointsDisplay" style="font-size:26px;font-weight:900;color:#d97706;margin:6px 0;">-- NeuPoints</div>
+            <div id="acctRateBreakdown" style="font-size:12px;color:#92400e;">Loading accrual rate…</div>
+          </div>
+
+          <!-- Zero-Return Fit Streak -->
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius-sm);padding:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:11px;font-weight:800;text-transform:uppercase;color:#166534;letter-spacing:.05em;">Zero-Return Fit Streak</span>
+              <span id="acctStreakFlame" style="font-size:16px;">🔥</span>
+            </div>
+            <div id="acctStreakCount" style="font-size:26px;font-weight:900;color:#15803d;margin:6px 0;">-- Kept Orders</div>
+            <div id="acctStreakBenefit" style="font-size:12px;color:#166534;">Loading streak metrics…</div>
+          </div>
+        </div>
+
+        <!-- Badges Earned -->
+        <div style="margin-bottom:18px;">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--mute);letter-spacing:.05em;margin-bottom:8px;">Unlocked Atelier Badges</div>
+          <div id="acctBadgesList" style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:12px;color:var(--mute);">Loading badges…</span>
+          </div>
+        </div>
+
+        <!-- Active AI Style Quests -->
+        <div>
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--mute);letter-spacing:.05em;margin-bottom:10px;">Active AI Style Quests (Personalized Closeting)</div>
+          <div id="acctQuestsContainer" style="display:flex;flex-direction:column;gap:10px;">
+            <div style="font-size:12px;color:var(--mute);">Fetching missions from AI Questmaster…</div>
+          </div>
+        </div>
       </div>
 
       <!-- Real Order History from D1 -->
@@ -3747,19 +3878,79 @@ async function renderAccountView(){
     $('acctSubText').innerHTML = `<span style="font-size:13px;">${esc(u.reply || 'Active standard tier.')}</span>`;
   }
 
-  // Loyalty
-  $('simAcctPurchase').onclick = async () => {
-    $('acctLoyaltyText').textContent = 'Executing loyalty accrual transaction…';
-    const d = await ask('how many points did I earn?');
-    if (!d.error) {
-      currentPointsBalance = d.payload?.balance || currentPointsBalance;
-      $('acctLoyaltyText').innerHTML = `
-        <div style="font-size:18px;font-weight:900;color:#d97706;">${currentPointsBalance} NeuPoints</div>
-        <div style="font-size:12px;color:var(--mute);margin-top:4px;">${esc(d.payload?.nudge || d.reply)}</div>
-      `;
-    }
+  // Loyalty & Gamification Loader
+  async function loadGamifiedLoyalty() {
+    try {
+      const res = await fetch(`/loyalty/${customerId}`);
+      const data = await res.json();
+      if (!data.error) {
+        currentPointsBalance = data.points_balance;
+        $('acctPointsDisplay').textContent = `${data.points_balance} NeuPoints`;
+        const streakMult = data.fit_streak_multiplier || 1.0;
+        $('acctRateBreakdown').innerHTML = `
+          Tier <b>${esc(data.tier)}</b> · <b>${streakMult}×</b> Fit Streak Multiplier · ${data.points_to_next_tier} pts to next tier
+        `;
+        $('acctStreakCount').textContent = `${data.fit_streak || 0}-Order Streak`;
+        $('acctStreakBenefit').innerHTML = `
+          <b>${streakMult}× Accrual</b> · ~£${((data.fit_streak || 0) * 14.5).toFixed(2)} return costs avoided · ${((data.fit_streak || 0) * 2.4).toFixed(1)}kg CO₂ saved
+        `;
+
+        // Badges
+        const badges = Array.isArray(data.badges) ? data.badges : [];
+        if (badges.length === 0) {
+          $('acctBadgesList').innerHTML = '<span style="font-size:12px;color:var(--mute);">Complete your first fit-verified order to unlock badges!</span>';
+        } else {
+          $('acctBadgesList').innerHTML = badges.map(b => `
+            <span style="font-size:11.5px;font-weight:700;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:4px 10px;border-radius:99px;">
+              🏆 ${esc(b)}
+            </span>
+          `).join('');
+        }
+
+        // Quests
+        const quests = Array.isArray(data.quests) ? data.quests : [];
+        if (quests.length === 0) {
+          $('acctQuestsContainer').innerHTML = '<div style="font-size:12.5px;color:var(--mute);">Ask the AI Concierge for style quests to generate personalized wardrobe missions!</div>';
+        } else {
+          $('acctQuestsContainer').innerHTML = quests.map(q => {
+            const pct = Math.min(100, Math.round(((q.progress || 0) / (q.target || 1)) * 100));
+            const isDone = q.status === 'completed' || q.status === 'claimed';
+            return `
+              <div style="border:1px solid ${isDone ? '#bbf7d0' : 'var(--rule)'};background:${isDone ? '#f0fdf4' : 'var(--canvas)'};border-radius:var(--radius-sm);padding:12px 14px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <span style="font-size:13px;font-weight:750;color:var(--ink);">${esc(q.title)}</span>
+                  <span style="font-size:11px;font-weight:700;background:${isDone ? '#dcfce7' : '#fef3c7'};color:${isDone ? '#15803d' : '#92400e'};padding:2px 8px;border-radius:99px;">
+                    ${isDone ? '✓ Completed' : `+${q.reward_points} NeuPoints`}
+                  </span>
+                </div>
+                <div style="font-size:12px;color:var(--mute);margin-bottom:8px;">${esc(q.desc)}</div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div style="flex:1;height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden;">
+                    <div style="width:${pct}%;height:100%;background:${isDone ? '#16a34a' : 'var(--ink)'};border-radius:99px;transition:width .3s;"></div>
+                  </div>
+                  <span style="font-size:11px;font-weight:700;color:var(--mute);">${q.progress}/${q.target}</span>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      }
+    } catch {}
+  }
+  loadGamifiedLoyalty();
+
+  $('askQuestsBtn').onclick = () => {
+    openChatConsole();
+    sendChatMessage('what are my style quests?');
   };
-  $('simAcctPurchase').click();
+  $('checkStreakBtn').onclick = () => {
+    openChatConsole();
+    sendChatMessage('check my fit streak');
+  };
+  $('simAcctPurchase').onclick = async () => {
+    await ask('how many points did I earn?');
+    loadGamifiedLoyalty();
+  };
 
   // Fetch real orders from D1
   fetch(`/api/customers/${customerId}/orders`)
@@ -4006,7 +4197,9 @@ function renderChatChips(type) {
       'show me an occasion dress',
       'what size should I get?',
       'tell me about the styling advisory plan',
-      'how many points did I earn?'
+      'how many points did I earn?',
+      'what are my style quests?',
+      'check my fit streak'
     ];
   }
 

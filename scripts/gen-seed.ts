@@ -212,17 +212,66 @@ const spendFor = (a:string) => a === 'affluent' ? int(2400,5200) : a === 'mid' ?
 const aupFor = (a:string) => a === 'affluent' ? r2(95 + rnd()*90) : a === 'mid' ? r2(42 + rnd()*35) : r2(14 + rnd()*22);
 const premFor = (a:string) => a === 'affluent' ? r2(0.55 + rnd()*0.3) : a === 'mid' ? r2(0.18 + rnd()*0.2) : r2(0.02 + rnd()*0.1);
 
+const PERSONA_GAMIFICATION: Record<string, { streak: number; mult: number; badges: string[]; quests: any[] }> = {
+  C001: {
+    streak: 5,
+    mult: 2.0,
+    badges: ['Fit Master', 'Zero-Return Champion', 'Capsule Pioneer'],
+    quests: [
+      { id: 'q_c001_1', title: 'Capsule Evening Look', desc: 'Pair your tailored blazer with a mulberry silk midi dress', category: 'dresses', progress: 0, target: 1, reward_points: 350, badge: 'Silk Connoisseur', status: 'active' },
+      { id: 'q_c001_2', title: 'Fit Confidence Streak', desc: 'Complete 1 more high-confidence fit order without returns', progress: 5, target: 6, reward_points: 250, badge: 'Sustainable Icon', status: 'active' },
+    ],
+  },
+  C002: {
+    streak: 0,
+    mult: 1.0,
+    badges: ['First Step'],
+    quests: [
+      { id: 'q_c002_1', title: 'Unlock Precision Fit', desc: 'Consult the Size & Fit agent on any dress to guarantee 0 size returns', progress: 0, target: 1, reward_points: 200, badge: 'Fit Explorer', status: 'active' },
+      { id: 'q_c002_2', title: 'Smart Value Wardrobe', desc: 'Find 1 core everyday essential under £40', progress: 0, target: 1, reward_points: 150, badge: 'Smart Shopper', status: 'active' },
+    ],
+  },
+  C003: {
+    streak: 3,
+    mult: 1.5,
+    badges: ['Fit Enthusiast', 'Style Seeker'],
+    quests: [
+      { id: 'q_c003_1', title: 'Styling Advisory Ascent', desc: 'Elevate your styling membership to unlock unlimited concierge consultations and 2× loyalty', progress: 0, target: 1, reward_points: 300, badge: 'Atelier Insider', status: 'active' },
+      { id: 'q_c003_2', title: 'Autumn Knitwear Match', desc: 'Add a verified fit cardigan or jumper to your collection', progress: 0, target: 1, reward_points: 200, badge: 'Cozy Curator', status: 'active' },
+    ],
+  },
+  C004: {
+    streak: 4,
+    mult: 1.5,
+    badges: ['Sartorial Precision', 'Fit Champion'],
+    quests: [
+      { id: 'q_c004_1', title: 'Classic Tailoring Capsule', desc: 'Explore menswear trousers or jackets in your true-to-size cut', progress: 0, target: 1, reward_points: 300, badge: 'Tailored Gent', status: 'active' },
+      { id: 'q_c004_2', title: 'Zero-Return Milestone', desc: 'Keep your 5th consecutive order to achieve 2× streak multiplier', progress: 4, target: 5, reward_points: 400, badge: 'Zero-Return Legend', status: 'active' },
+    ],
+  },
+  C000: {
+    streak: 0,
+    mult: 1.0,
+    badges: ['Atelier Guest'],
+    quests: [
+      { id: 'q_c000_1', title: 'Welcome Quest', desc: 'Sign in and explore your personal style profile', progress: 0, target: 1, reward_points: 100, badge: 'Welcome Member', status: 'active' },
+    ],
+  },
+};
+
 const customers: Cust[] = [];
 const cRows: unknown[][] = [], lRows: unknown[][] = [], sRows: unknown[][] = [];
 for (const p of PERSONAS) {
   const lifetime = p.affluence === 'affluent' ? 6400 : p.affluence === 'mid' ? 2100 : 210;
+  const gam = PERSONA_GAMIFICATION[p.id] ?? { streak: 0, mult: 1.0, badges: [], quests: [] };
   cRows.push([p.id, p.name, p.email, p.city, daysAgo(p.tenure*30),
     p.declaredSpend ?? spendFor(p.affluence),
     p.declaredAup ?? aupFor(p.affluence),
     p.declaredPremium ?? premFor(p.affluence), p.consentFit, 1, p.note, p.shopsFor]);
   lRows.push([p.id, tierFor(lifetime), Math.round(lifetime*0.35), lifetime,
     p.affluence === 'affluent' ? 0.84 : p.affluence === 'mid' ? 0.58 : 0.21,
-    lifetime > 4500 ? 9000 - lifetime : 4500 - lifetime]);
+    lifetime > 4500 ? 9000 - lifetime : 4500 - lifetime,
+    gam.streak, gam.mult, JSON.stringify(gam.badges), JSON.stringify(gam.quests)]);
   sRows.push([p.id, p.sub, p.sub === 'plus' ? 4.99 : p.sub === 'premium' ? 9.99 : 0,
     p.sub === 'free' ? null : daysAgo(120), null, 0]);
   customers.push({ id: p.id, affluence: p.affluence, orders: p.orders, tenure: p.tenure, fit: p.fit, consentFit: p.consentFit, shopsFor: p.shopsFor });
@@ -233,17 +282,21 @@ NAMES.forEach(({ name, shopsFor }, i) => {
   const tenure = int(1,48), orders = tenure < 4 ? int(1,3) : int(4,26);
   const lifetime = affluence === 'affluent' ? int(4000,12000) : affluence === 'mid' ? int(1200,4400) : int(80,1400);
   const consentFit = rnd() > 0.3 ? 1 : 0;
+  const streak = orders >= 8 ? 4 : orders >= 3 ? 2 : 0;
+  const mult = streak >= 5 ? 2.0 : streak >= 3 ? 1.5 : streak >= 2 ? 1.25 : 1.0;
+  const badges = streak >= 3 ? ['Fit Enthusiast'] : [];
   cRows.push([id, name, `${name.toLowerCase().replace(/[^a-z]+/g,'.')}@example.com`, pick(CITIES),
     daysAgo(tenure*30), spendFor(affluence), aupFor(affluence), premFor(affluence), consentFit, rnd() > 0.2 ? 1 : 0, null, shopsFor]);
   lRows.push([id, tierFor(lifetime), Math.round(lifetime*0.3), lifetime, r2(rnd()),
-    lifetime > 4500 ? Math.max(0, 9000-lifetime) : Math.max(0, 4500-lifetime)]);
+    lifetime > 4500 ? Math.max(0, 9000-lifetime) : Math.max(0, 4500-lifetime),
+    streak, mult, JSON.stringify(badges), JSON.stringify([])]);
   const sub = rnd() > 0.88 ? 'plus' : 'free';
   sRows.push([id, sub, sub === 'plus' ? 4.99 : 0, sub === 'free' ? null : daysAgo(int(30,300)), null, int(0,2)]);
   customers.push({ id, affluence, orders, tenure, fit: orders > 6 && consentFit ? 'rich' : orders > 2 ? 'thin' : 'none', consentFit, shopsFor });
 });
 // `customers` emit happens after fitObs exists below - height/weight/age are sampled
 // from real fitment_dat.csv rows matching each customer's own purchase-size history.
-emit('loyalty_accounts', ['customer_id','tier','points_balance','lifetime_points','engagement_score','points_to_next_tier'], lRows);
+emit('loyalty_accounts', ['customer_id','tier','points_balance','lifetime_points','engagement_score','points_to_next_tier','fit_streak','fit_streak_multiplier','badges','quests'], lRows);
 emit('subscriptions', ['customer_id','tier','price_gbp_month','started_at','last_offer_at','offers_declined'], sRows);
 
 // ---- orders, items, returns

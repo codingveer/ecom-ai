@@ -23,12 +23,35 @@ const KEY = 'registry:v1';
 const app = new Hono<{ Bindings: Env }>();
 
 export async function loadRegistry(env: Env): Promise<Map<string, ToolContract>> {
-  let list = await env.REGISTRY.get<ToolContract[]>(KEY, 'json');
-  if (!list) {
-    list = BUNDLED;
-    await env.REGISTRY.put(KEY, JSON.stringify(list));
+  const map = new Map<string, ToolContract>(BUNDLED.map(c => [c.name, c]));
+  try {
+    const list = await env.REGISTRY.get<ToolContract[]>(KEY, 'json');
+    if (!list || !Array.isArray(list)) {
+      await env.REGISTRY.put(KEY, JSON.stringify(BUNDLED));
+    } else {
+      let updated = false;
+      // Preserve any dynamically installed contracts from KV
+      for (const t of list) {
+        if (t && t.name && !map.has(t.name)) {
+          map.set(t.name, t);
+        }
+      }
+      // Check if any bundled contracts were missing from KV
+      const kvNames = new Set(list.filter(Boolean).map(t => t.name));
+      for (const b of BUNDLED) {
+        if (!kvNames.has(b.name)) {
+          updated = true;
+          break;
+        }
+      }
+      if (updated) {
+        await env.REGISTRY.put(KEY, JSON.stringify([...map.values()]));
+      }
+    }
+  } catch (err) {
+    console.error('loadRegistry KV error, falling back to bundled tools:', err);
   }
-  return new Map(list.map(c => [c.name, c]));
+  return map;
 }
 
 /** Minimal contract validator - deliberately hand-rolled so the enforcement is readable. */
@@ -47,6 +70,8 @@ function validate(contract: ToolContract, args: Record<string, unknown>) {
       else v = spec.type === 'integer' ? Math.trunc(n) : n;
     } else if (spec.type === 'string' && typeof v !== 'string') v = String(v);
     else if (spec.type === 'boolean') v = v === true || v === 'true';
+    else if (spec.type === 'array' && !Array.isArray(v)) errors.push(`field '${field}' must be array`);
+    else if (spec.type === 'object' && (typeof v !== 'object' || Array.isArray(v))) errors.push(`field '${field}' must be object`);
     coerced[field] = v;
   }
   const unknown = Object.keys(args).filter(k => !(k in contract.input_schema));
@@ -157,8 +182,15 @@ export async function executeTool(
     // Service binding: a direct Worker-to-Worker call. No public internet hop, no
     // credentials to manage, and the services Worker can stay internal-only.
     const r = await env.SERVICES.fetch(new Request(url, init));
-    const data = await r.json();
     const ms = Date.now() - started;
+    const raw = await r.text();
+    let data: unknown;
+    try {
+      data = raw ? JSON.parse(raw) : undefined;
+    } catch {
+      audit(env, ['invoke.error', tool, agent, `non_json_response:${raw.slice(0, 200)}`], [r.status, ms]);
+      return { ok: false, status: r.status, error: 'service_error', tool, detail: raw.slice(0, 500) };
+    }
     audit(env, ['invoke', tool, agent, contract.version], [r.status, ms]);
     if (r.ok) {
       return { ok: true, status: r.status, tool, version: contract.version, latency_ms: ms, data };
@@ -168,7 +200,12 @@ export async function executeTool(
       status: r.status,
       error: 'service_error',
       tool,
-      detail: typeof data === 'object' && data && 'error' in data ? String((data as any).error) : undefined,
+      detail:
+        typeof data === 'object' && data && 'detail' in data
+          ? String((data as any).detail)
+          : typeof data === 'object' && data && 'error' in data
+            ? String((data as any).error)
+            : undefined,
     };
   } catch (e) {
     audit(env, ['invoke.error', tool, agent, String(e)], [502, Date.now() - started]);

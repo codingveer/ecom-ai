@@ -1,0 +1,27 @@
+{
+  "name": "loyalty.quests.get",
+  "version": "1.0.0",
+  "purpose": "Fetch customer's active and completed gamified style missions, rewards, and unlocked badges.",
+  "allowed_agents": [
+    "loyalty",
+    "orchestrator"
+  ],
+  "input_schema": {
+    "customer_id": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "output_schema": {
+    "customer_id": "string",
+    "quests": "array",
+    "badges": "array",
+    "balance": "integer",
+    "tier": "string"
+  },
+  "transport": {
+    "service": "services",
+    "method": "GET",
+    "path": "/loyalty/{customer_id}/quests"
+  }
+}

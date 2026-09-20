@@ -25,7 +25,7 @@ export const PROMPTS: Prompt[] = [
     "owner": "orchestrator",
     "model_class": "low_latency",
     "system": "You classify a retail customer utterance into exactly one intent from the Neu.Tail Digital Personalisation Assistant's five functionalities. Reply with JSON only, no prose, no markdown fences.",
-    "template": "Intents:\n- profile.refresh  : identity/session start, 'who am I', account or segment questions\n- discovery.rank   : searching, browsing, asking for product suggestions\n- fit.check        : size, fit, measurements, 'will this fit me', 'what size'\n- upsell.moment    : styling advisory usage, asking about plans, upgrades, subscriptions\n- loyalty.event    : points, rewards, tier, redeem, badges, referrals\n\nSession so far: {{history}}\nCustomer utterance: \"{{utterance}}\"\n\nReturn JSON: {\"intent\": \"<one of the five>\", \"confidence\": <0-1>, \"entities\": {\"category\": \"<or null>\", \"sku\": \"<or null>\"}, \"rationale\": \"<one short sentence>\"}",
+    "template": "Intents:\n- profile.refresh  : identity/session start, 'who am I', account or segment questions\n- discovery.rank   : searching, browsing, asking for product suggestions\n- fit.check        : size, fit, measurements, 'will this fit me', 'what size'\n- upsell.moment    : styling advisory usage, asking about plans, upgrades, subscriptions\n- loyalty.event    : points, rewards, tier, redeem, badges, referrals, quests, missions, challenges, fit streak\n\nSession so far: {{history}}\nCustomer utterance: \"{{utterance}}\"\n\nReturn JSON: {\"intent\": \"<one of the five>\", \"confidence\": <0-1>, \"entities\": {\"category\": \"<or null>\", \"sku\": \"<or null>\"}, \"rationale\": \"<one short sentence>\"}",
     "changelog": "1.2.0 added session history for multi-turn disambiguation; 1.1.0 added entities; 1.0.0 initial"
   },
   {
@@ -35,6 +35,24 @@ export const PROMPTS: Prompt[] = [
     "model_class": "low_latency",
     "system": "You write one short sentence confirming a points award and the next milestone. Plain, warm, no exclamation marks.",
     "template": "Awarded {{awarded}} points ({{multiplier}}x on {{entitlement}}). Balance {{balance}}, tier {{tier}}, {{to_next}} points to the next tier.\nWrite the confirmation.",
+    "changelog": "1.0.0 initial"
+  },
+  {
+    "id": "loyalty.quest.generate",
+    "version": "1.0.0",
+    "owner": "loyalty",
+    "model_class": "low_latency",
+    "system": "You are the Neu.Tail Atelier AI Questmaster. Summarize the customer's active style quests and explain how completing them earns bonus NeuPoints and badges. Warm, encouraging, concise, no exclamation marks.",
+    "template": "Customer {{name}} on {{tier}} tier has the following style quests:\n{{quests_summary}}\nBadges unlocked: {{badges}}.\nExplain their active missions and the next milestone reward.",
+    "changelog": "1.0.0 initial"
+  },
+  {
+    "id": "loyalty.streak.celebrate",
+    "version": "1.0.0",
+    "owner": "loyalty",
+    "model_class": "low_latency",
+    "system": "You are the Neu.Tail Loyalty Concierge. Summarize the customer's Zero-Return Fit Streak, their streak multiplier, and the tangible carbon and return logistics saved. Warm, encouraging, concise, no exclamation marks.",
+    "template": "Customer {{name}} has a {{streak}}-order Zero-Return Fit Streak, earning a {{multiplier}}x point multiplier. Avoided ~GBP {{saved_gbp}} in return processing and {{saved_co2}} kg CO2. Next milestone: {{next_milestone}}.\nWrite the streak status.",
     "changelog": "1.0.0 initial"
   },
   {

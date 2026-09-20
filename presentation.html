@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neu.Tail — Hackathon Presentation (Mission #4)</title>
+  <style>
+    :root {
+      --bg-dark: #0b0f19;
+      --bg-card: #182033;
+      --bg-card-light: #1e2941;
+      --accent-cyan: #38bdf8;
+      --accent-gold: #f59e0b;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-purple: #a855f7;
+      --text-white: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #030712;
+      color: var(--text-white);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #stage {
+      width: 95vw;
+      max-width: 1400px;
+      height: min(85vh, 787px);
+      aspect-ratio: 16 / 9;
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 44px 56px;
+      display: none;
+      flex-direction: column;
+      opacity: 0;
+      transition: opacity 0.25s ease-in-out;
+    }
+    .slide.active {
+      display: flex;
+      opacity: 1;
+    }
+
+    .category-tag {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      margin-bottom: 6px;
+    }
+
+    .slide-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text-white);
+      line-height: 1.2;
+      margin-bottom: 6px;
+    }
+    .slide-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; flex: 1; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; flex: 1; }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px 22px;
+      display: flex;
+      flex-direction: column;
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cyan { color: var(--accent-cyan); }
+    .gold { color: var(--accent-gold); }
+    .emerald { color: var(--accent-emerald); }
+    .rose { color: var(--accent-rose); }
+    .purple { color: var(--accent-purple); }
+
+    .bullet-list {
+      list-style: none;
+      font-size: 12.5px;
+      line-height: 1.65;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .bullet-list li strong { color: var(--text-white); }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--bg-card-light);
+      border: 1px solid var(--border-color);
+    }
+
+    .hero-title {
+      font-size: 40px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #ffffff 40%, var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-top: 24px;
+      margin-bottom: 10px;
+      line-height: 1.15;
+    }
+    .hero-sub {
+      font-size: 18px;
+      color: var(--accent-gold);
+      font-weight: 600;
+      margin-bottom: 30px;
+    }
+
+    /* Controls & Notes */
+    #nav-bar {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .nav-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-white);
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover { background: var(--bg-card-light); border-color: var(--accent-cyan); }
+    #notes-drawer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(11, 15, 25, 0.96);
+      border-top: 2px solid var(--accent-gold);
+      padding: 16px 30px;
+      font-size: 13px;
+      color: #cbd5e1;
+      display: none;
+      backdrop-filter: blur(8px);
+    }
+    #notes-drawer.open { display: block; }
+    .progress-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: var(--accent-cyan);
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="stage">
+    <div id="progress" class="progress-bar" style="width: 7.1%;"></div>
+
+    <!-- SLIDE 1 -->
+    <div class="slide active" data-notes="Welcome judges. Today we are demonstrating Neu.Tail, our edge-native multi-agent personalization assistant for Mission #4. We move eCommerce personalization from marketing fluff into a zero-trust, explainable system that cuts the 34% returns trap.">
+      <div class="category-tag">Mission #4 — Working Prototype Demo</div>
+      <div class="badge cyan" style="width: fit-content;">Team 4 · Cartwheel Galaxy</div>
+      <h1 class="hero-title">Neu.Tail — Digital Personalisation Assistant</h1>
+      <p class="hero-sub">Edge-Native Multi-Agent Personalization with Platform-Enforced Zero-Trust Data Isolation</p>
+      
+      <div class="card" style="margin-top: 10px;">
+        <ul class="bullet-list" style="font-size: 13.5px; gap: 12px;">
+          <li><strong class="cyan">• Platform Foundation:</strong> 4 Isolated Cloudflare Workers (Services, Cut-Down MCP Tools, LLM Gateway, Orchestrator App).</li>
+          <li><strong class="gold">• Multi-Agent Runtime:</strong> 5 Specialized Agents, Durable Objects for Serialized Sessions, KV Runtime Registry.</li>
+          <li><strong class="emerald">• Real Economic ROI:</strong> Directly drives apparel baseline return rate from 34.0% down to 20.4% via empirical anthropometrics.</li>
+          <li><strong class="purple">• Zero-Trust Proof:</strong> Three of the four Workers have NO database binding. Agents physically cannot run SQL or leak raw data.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SLIDE 2 -->
+    <div class="slide" data-notes="We start with the empirical baseline. In our committed seed dataset, there are 1,120 items and 381 returns—exactly 34.0%. 58% of these returns are tagged size_fit. Our mission is to move this number using specialized agents.">
+      <div class="category-tag">Problem Statement & Commercial Foundation</div>
+      <div class="slide-title">The 34% Returns Crisis in Fashion eCommerce</div>
+      <div class="slide-sub">eCommerce profitability bleeds from reverse logistics, driven by size mismatches and unguided discovery.</div>
+      
+      <div class="grid-3" style="margin-bottom: 16px;">
+        <div class="card">
+          <div class="card-title rose">34.0% Baseline Return Rate</div>
+          <ul class="bullet-list">
+            <li><strong>Grounding:</strong> 1,120 Order items across 41 synthetic customer personas.</li>
+            <li><strong>381 Returns:</strong> Assigned by exact quota to match M3 baseline.</li>
+            <li><strong>Financial Toll:</strong> $800B+ industry margin destruction.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title gold">58.0% Size & Fit Driven</div>
+          <ul class="bullet-list">
+            <li><strong>19.7 points</strong> of the 34% total baseline.</li>
+            <li><strong>Bracket Shopping:</strong> Customers buy 2-3 sizes knowing they'll return.</li>
+            <li><strong>Arbitrary Offsets:</strong> Generic sizing charts fail real body shapes.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title cyan">22.0% Changed Mind / Style</div>
+          <ul class="bullet-list">
+            <li><strong>7.5 points</strong> of the 34% total baseline.</li>
+            <li><strong>Discovery Failure:</strong> Uncurated recommendations and mismatched quality.</li>
+            <li><strong>Solvable via AI:</strong> Segment curation + Virtual AR preview.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card" style="background: var(--bg-card-light);">
+        <div class="card-title emerald">The Neu.Tail Engineering Rule</div>
+        <div style="font-size: 13px; color: #e2e8f0; line-height: 1.5;">
+          A sizing recommendation must be grounded in empirical anthropometrics, and the agent must <strong>ABSTAIN</strong> whenever confidence is below 70%. When uncertain, silence is the high-margin decision.
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 3 -->
+    <div class="slide" data-notes="Here is the architectural mic-drop for the judges: 3 of our 4 Workers have NO D1 database binding. Agents communicate exclusively via typed MCP contracts over private Service Bindings. The agent cannot leak data.">
+      <div class="category-tag">Architecture & Infrastructure</div>
+      <div class="slide-title">Platform-Enforced Zero-Trust Micro-Workers</div>
+      <div class="slide-sub">Security and isolation are enforced by Cloudflare Worker capability bindings, not developer discipline.</div>
+
+      <div class="grid-4" style="margin-bottom: 16px;">
+        <div class="card">
+          <div class="card-title cyan">1. Services</div>
+          <div class="badge" style="margin-bottom: 8px;">neutail-services</div>
+          <ul class="bullet-list">
+            <li><strong>SOLE DB Binding (D1)</strong></li>
+            <li>Customer 360 & SQL data</li>
+            <li>120k Anthropometric bands</li>
+            <li>Internal-only service binding</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title purple">2. Tools (MCP)</div>
+          <div class="badge" style="margin-bottom: 8px;">neutail-tools</div>
+          <ul class="bullet-list">
+            <li><strong>Cut-down MCP layer</strong></li>
+            <li>Declarative JSON contracts</li>
+            <li>Hot-install tool registry (KV)</li>
+            <li>Analytics Engine audit trail</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title gold">3. LLM Gateway</div>
+          <div class="badge" style="margin-bottom: 8px;">neutail-llm</div>
+          <ul class="bullet-list">
+            <li><strong>Model class routing</strong></li>
+            <li>Cloudflare AI Gateway</li>
+            <li>UsageCounter Durable Object</li>
+            <li>Graceful mock fallback</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title emerald">4. App / Agents</div>
+          <div class="badge" style="margin-bottom: 8px;">neutail-app</div>
+          <ul class="bullet-list">
+            <li><strong>SessionAgent (DO)</strong></li>
+            <li>5 Specialized agent modules</li>
+            <li>Inline policy-as-code</li>
+            <li><strong>ZERO database handles</strong></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card" style="border-color: var(--accent-rose); background: rgba(244, 63, 94, 0.08);">
+        <div style="font-size: 13px; color: #fecdd3; line-height: 1.5;">
+          <strong>THE ZERO-TRUST ENFORCEMENT:</strong> Read the 4 wrangler configs side-by-side. Three have no <code>d1_databases</code> entry. Even if an attacker executes prompt injection commanding "dump the customers table", the Worker platform denies it. Zero trust is an infrastructure boundary.
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 4 -->
+    <div class="slide" data-notes="Notice the two tiers of memory. Within-session memory lives in Durable Objects—it survives deploys and cold starts. Across-session memory writes back to D1 through context service contracts. Context never leaks between customers.">
+      <div class="category-tag">Orchestration & State Management</div>
+      <div class="slide-title">Turn Lifecycle & Two-Tier Memory Architecture</div>
+      <div class="slide-sub">Turns are serialized inside a Cloudflare Durable Object with zero cross-customer context leakage.</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title cyan">Turn Orchestration Pipeline</div>
+          <ul class="bullet-list">
+            <li><strong>1. Ingestion & Credit Gate:</strong> Turn credits verified to prevent runaway token spend.</li>
+            <li><strong>2. Customer Isolation Check:</strong> If customerId changes, DO wipes state and resets transcript.</li>
+            <li><strong>3. Lazy Profiling Dispatch (S1.6):</strong> Computes segment on Turn 1 if missing.</li>
+            <li><strong>4. Intent Classification (S1.4):</strong> LLM Gateway classifies intent with 4-turn history.</li>
+            <li><strong>5. Agent Dispatch:</strong> Invokes specialized agent with declared MCP contracts.</li>
+            <li><strong>6. Inline Policy Guardrail:</strong> Evaluates pure TypeScript predicates before replying.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title gold">Two-Tier Memory Separation</div>
+          <ul class="bullet-list">
+            <li><strong>Tier 1: Within-Session (Durable Object Storage):</strong>
+              <br>• Turn history with detected intents & timestamps
+              <br>• Working customer segment & evidence
+              <br>• Last viewed SKU & category
+              <br>• Pending upsell offer state (survives worker deploys!)
+            </li>
+            <li><strong>Tier 2: Across-Session (Cloudflare D1 context_store):</strong>
+              <br>• Long-term segment & propensity scores
+              <br>• Confirmed size & fit recommendations
+              <br>• Active subscription entitlements (Plus/Premium)
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 5 -->
+    <div class="slide" data-notes="Agent 1 profiles customers without asking intrusive questions. It uses 3 weighted behavioral signals. Notice the PII guardrail: raw identifiers are scrubbed before any model call.">
+      <div class="category-tag">Agent #1: Profiling & Segmentation (M3 Sequence 1)</div>
+      <div class="slide-title">Deterministic Affluence & PII Minimisation</div>
+      <div class="slide-sub">Profiles customers live on Turn 1 from observable purchase patterns without using protected attributes.</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title cyan">Objective Scoring Formula</div>
+          <div style="font-family: monospace; background: var(--bg-dark); padding: 10px; border-radius: 6px; font-size: 11.5px; color: var(--accent-gold); margin-bottom: 12px;">
+            Affluence = 0.40*(AUP/120) + 0.35*(PremShare/0.60) + 0.25*(Spend/3500)
+          </div>
+          <ul class="bullet-list">
+            <li><strong>AUP Score (40%):</strong> Avg Unit Price vs £120 ceiling.</li>
+            <li><strong>Premium Share (35%):</strong> Share of premium SKUs vs 60% benchmark.</li>
+            <li><strong>Annual Spend (25%):</strong> Trailing 12-month spend vs £3,500.</li>
+            <li><strong>Classification Bands:</strong>
+              <br>• &ge; 0.62 &rarr; <strong>Affluent</strong> (Priya C001: 0.77)
+              <br>• &ge; 0.32 &rarr; <strong>Mid</strong> (Arjun C004: 0.44)
+              <br>• &lt; 0.32 &rarr; <strong>Value-Seeking</strong> (Aditi C002: 0.18)
+            </li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title emerald">Inline Policy Guardrail: PII Minimisation</div>
+          <ul class="bullet-list">
+            <li><strong>The Privacy Mandate:</strong> No raw identifiers (names, emails, phone numbers, cities) may ever travel to an external LLM.</li>
+            <li><strong>Inline Execution:</strong> Evaluated via <code>piiMinimisation()</code> before context write-back.</li>
+            <li><strong>Safe Model Payload:</strong> Downstream agents receive ONLY derived mathematical features:
+              <br><code>{ affluence: 'affluent', aup: 114.20, tenure_days: 340 }</code>
+            </li>
+            <li><strong>Immutable Audit:</strong> Pass/block decision logged to Cloudflare Analytics Engine.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 6 -->
+    <div class="slide" data-notes="Agent 2 demonstrates discovery personalization. Same query, different results. Notice our fairness backstop: if personalization tries to isolate a shopper in a single tier, the guardrail blocks.">
+      <div class="category-tag">Agent #2: Discovery & Recommendation (M3 Sequence 2)</div>
+      <div class="slide-title">Personalised Ranking with Algorithmic Fairness</div>
+      <div class="slide-sub">Same query returns different products for affluent vs value customers, while guaranteeing equal access.</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title cyan">Multi-Factor Objective Function</div>
+          <div style="font-family: monospace; background: var(--bg-dark); padding: 10px; border-radius: 6px; font-size: 11.5px; color: var(--accent-gold); margin-bottom: 12px;">
+            Score = Relevance + TierW*0.5 + Rating*0.35 + StockBoost + FitBoost - ReturnRate*1.2
+          </div>
+          <ul class="bullet-list">
+            <li><strong>Affluent Tier Weights:</strong> Premium (3.0x), Core (1.6x), Value (0.2x).</li>
+            <li><strong>Value Tier Weights:</strong> Value (3.0x), Private Label (2.6x), Premium (0.3x).</li>
+            <li><strong>Fit-Aware Boost:</strong> +0.6 boost if customer's known size is in stock.</li>
+            <li><strong>Return Penalty:</strong> SKUs with high return history down-weighted (-1.2x).</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title rose">Fairness Guardrail: "Ranking differs, access does not"</div>
+          <ul class="bullet-list">
+            <li><strong>1. Identical Eligibility:</strong> Candidate pool size must be 100% equal across segments. Zero catalog redlining.</li>
+            <li><strong>2. Diversity Floor:</strong> Enforces &ge;2 price tiers in top 10 to prevent algorithmic exclusion.</li>
+            <li><strong>3. Neutral Comparator:</strong> Verified against neutral sorting (relevance/rating).</li>
+            <li><strong>4. Live Demo Toggle:</strong> Passing <code>unsafeRanking: true</code> skips diversity floor; guardrail visibly <strong>BLOCKS</strong> and serves neutral ranking!</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 7 -->
+    <div class="slide" data-notes="Agent 3 is our direct lever on returns. We don't use fake centimeter offsets—we derive sizing from 120k real rows. Crucially, if confidence is below 70%, the agent abstains. No guessing.">
+      <div class="category-tag">Agent #3: Size & Fit Personalisation (M3 Sequence 3)</div>
+      <div class="slide-title">Anthropometric Sizing Science & The Abstain Rule</div>
+      <div class="slide-sub">The direct lever on 58% of the returns crisis, combining empirical distributions with strict consent.</div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title gold">1. Strict Consent Gate</div>
+          <ul class="bullet-list">
+            <li>Body measurements are strictly confidential.</li>
+            <li>Checked via <code>fitConsent()</code> before reading any metrics.</li>
+            <li>If consent is false, measurements are blocked.</li>
+            <li>Degrades to standard size guide.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title cyan">2. 120k Anthropometrics</div>
+          <ul class="bullet-list">
+            <li>Grounded on 120,000 real sizing rows (<code>fitment_dat.csv</code>).</li>
+            <li>Calculates Z-score distance:
+              <br><code>&Delta; = (|H - &mu;h|/&sigma;h + |W - &mu;w|/&sigma;w)/2</code>
+            </li>
+            <li>Adjusts for brand cut (runs_small, runs_large, relaxed).</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title emerald">3. The 70% Abstain Rule</div>
+          <ul class="bullet-list">
+            <li>Confidence scorecard:
+              <br>+5 per kept purchase, +20 for low Z-distance, -12 per prior return.
+            </li>
+            <li><strong>If confidence &lt; 70% &rarr; ABSTAIN!</strong></li>
+            <li>Wrong recommendations create returns. Silence protects margin.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 8 -->
+    <div class="slide" data-notes="The hackathon brief permitted selecting either Upsell or Loyalty. We built BOTH because the handoff between them is the ultimate proof of cross-agent shared memory. Loyalty reads what Upsell wrote.">
+      <div class="category-tag">Agents #4 & #5: Monetisation & Loyalty (M3 Sequences 4 & 5)</div>
+      <div class="slide-title">Value-Timed Upsell & Cross-Agent Shared Memory</div>
+      <div class="slide-sub">Proving cross-agent collaboration: the Loyalty Agent reads the entitlement written by the Upsell Agent.</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title gold">Agent #4: Styling Advisory Upsell</div>
+          <ul class="bullet-list">
+            <li><strong>Demonstrated Value Trigger:</strong> Triggers offer ONLY on the 3rd completed Styling Advisory session (Meera C003).</li>
+            <li><strong>Policy Frequency Cap:</strong> <code>upsellFrequencyCap()</code> enforces 7-day cooldown; permanently suppresses after 2 declines.</li>
+            <li><strong>Offer Presentation:</strong> Styling Plus for £4.99/mo (AI concierge & 2x loyalty accrual).</li>
+            <li><strong>Entitlement Write:</strong> On customer "accept", writes <code>tier: 'plus'</code> to persistent D1 context.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title cyan">Agent #5: Cross-Agent Loyalty Accrual</div>
+          <ul class="bullet-list">
+            <li><strong>The Cross-Agent Handshake:</strong> When points are accrued, Loyalty Agent calls <code>subscription.get</code> via tool gateway.</li>
+            <li><strong>Entitlement Read:</strong> Reads the 'plus' subscription tier written by Agent #4 in the previous turn!</li>
+            <li><strong>Dynamic 2x Multiplier:</strong> Automatically upgrades accrual from 1x to 2x multiplier!</li>
+            <li><strong>Liability Accounting:</strong> Releases point liability upon redemption (£0.05/point).</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 9 -->
+    <div class="slide" data-notes="Objective 2 asks for a cut-down MCP layer and an LLM gateway. Our tools live in KV—we can install new tools live with curl. Our LLM gateway abstracts all provider models.">
+      <div class="category-tag">Objective 2 Compliance</div>
+      <div class="slide-title">Cut-Down MCP Tool Gateway & Unified LLM Gateway</div>
+      <div class="slide-sub">Zero hardcoded endpoints in agents; strict schema contracts and provider interoperability.</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title purple">Cut-Down MCP Tool Gateway (Worker #2)</div>
+          <ul class="bullet-list">
+            <li><strong>Explicit Contracts:</strong> Name, version, purpose, allowed_agents, input/output schemas, transport.</li>
+            <li><strong>Strict Permissions:</strong> If Discovery calls <code>loyalty.accrue</code> &rarr; 403 <code>permission_denied</code>.</li>
+            <li><strong>Hot-Install in KV:</strong> Installing <code>catalogue.trending.get</code> increments tools 22 &rarr; 23 with ZERO redeploy!</li>
+            <li><strong>Immutable Audit:</strong> Invocations streamed to Cloudflare Analytics Engine dataset.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title gold">Enterprise LLM Gateway (Worker #3)</div>
+          <ul class="bullet-list">
+            <li><strong>Model Class Routing:</strong> Agents request 'reasoning' or 'low_latency'—never a provider name or raw model ID.</li>
+            <li><strong>Interoperability:</strong> Switch between Mock, OpenAI, Anthropic, Workers AI with 0 code change.</li>
+            <li><strong>Cloudflare AI Gateway:</strong> Upstream caching, rate-limiting, and per-request logging.</li>
+            <li><strong>Durable Object UsageCounter:</strong> Global strongly-consistent token spend accounting.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 10 -->
+    <div class="slide" data-notes="Here is where we win the technical judges: our return reduction is modeled from the live database. We also tell the truth: AI alone drops returns to 20.4%. Closing to 10% requires retail policy changes.">
+      <div class="category-tag">Business Outcome & Return Economics</div>
+      <div class="slide-title">Mathematical Return Reduction: 34.0% &rarr; 20.4%</div>
+      <div class="slide-sub">Computed directly from live synthetic data via GET /outcome with transparent unit economics.</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title cyan">Live Corpus Outcome Decomposition</div>
+          <ul class="bullet-list">
+            <li><strong>Baseline Return Rate:</strong> 34.0% across 1,120 items (381 returns).</li>
+            <li><strong class="gold">• Size & Fit Lever:</strong> 19.7 pts &times; 65% reach &times; 75% capture = <strong>-9.6 pp</strong> (Fit Agent).</li>
+            <li><strong class="cyan">• Changed Mind Lever:</strong> 7.5 pts &times; 100% reach &times; 40% capture = <strong>-3.0 pp</strong> (Discovery/AR).</li>
+            <li><strong class="emerald">• Quality Defect Lever:</strong> 4.1 pts &times; 100% reach &times; 25% capture = <strong>-1.0 pp</strong> (Supplier Loop).</li>
+            <li><strong>• Other / Damaged:</strong> 2.7 pts &rarr; 0.0 pp (no claim made).</li>
+            <li><strong class="gold">PROJECTED RETURN RATE:</strong> <strong>20.4% (-13.6 pp removed)</strong>.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title emerald">The "Honest Architect" Stance</div>
+          <ul class="bullet-list">
+            <li><strong>The Hackathon Brief Target:</strong> 10% to 15% return rate.</li>
+            <li><strong>The Architectural Reality:</strong> Personalisation & sizing AI alone remove 13.6 percentage points, reaching 20.4%.</li>
+            <li><strong>Why Claiming 10% is Fraudulent:</strong> Anyone claiming AI alone reaches 10% in apparel is hallucinating. AI cannot fix fabric defects or buyer remorse.</li>
+            <li><strong>Closing the Remaining Gap:</strong> Requires assortment rationalization, supplier remediation, and return-fee policy changes.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 11 -->
+    <div class="slide" data-notes="Objective 3 explicitly asks to call out deviations. Volunteering these before judges ask shows senior engineering judgment. Every deviation was an architectural upgrade.">
+      <div class="category-tag">Objective 3 Compliance</div>
+      <div class="slide-title">Eight Deliberate Blueprint Deviations</div>
+      <div class="slide-sub">Calling out where the build improved on the M3 blueprint shows senior engineering judgment.</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title cyan">1. Durable Objects over Memory Maps</div>
+          <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+            Blueprint named Context Manager. We replaced single-process Maps with Cloudflare Durable Objects. Sessions are serialized, survive deploys, and eliminate customer context leaks.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title gold">2. Synchronous Bindings over Kafka</div>
+          <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+            Blueprint proposed Kafka bus. We substituted zero-latency Worker Service Bindings. Async paths are preserved without Kafka operational overhead at the edge.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title emerald">3. TypeScript Predicates over Rego/OPA</div>
+          <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+            Policy-as-code is implemented as pure TypeScript predicates. Same guarantee: evaluated inline, agent cannot overrule, and trace is permanently recorded.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title purple">4. Both Monetization Agents Built</div>
+          <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+            Brief permitted selecting Upsell OR Loyalty. We built both to definitively prove cross-agent memory handoff (Loyalty reads Upsell's written entitlement for 2x multiplier).
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 12 -->
+    <div class="slide" data-notes="Follow this exact 10-beat cue sheet during the live demo. It guarantees every hackathon objective is hit within 8 minutes.">
+      <div class="category-tag">Live Demo Playbook</div>
+      <div class="slide-title">The 8-Minute Winning Rehearsal Script</div>
+      <div class="slide-sub">A tightly scripted live run covering all five functionalities, guardrails, and gateway tools.</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title cyan">Part 1: The Personalisation Story</div>
+          <ul class="bullet-list">
+            <li><strong>Beat 0 (30s) Baseline:</strong> <code>curl return-rate</code> &rarr; 34.0% across 1,120 items.</li>
+            <li><strong>Beat 1 (60s) Affluent:</strong> Priya: <em>"show me an occasion dress"</em> &rarr; 0.77 score, premium ranking.</li>
+            <li><strong>Beat 2 (60s) Value:</strong> Aditi: SAME query &rarr; Value/core ranking. "Ranking differs, access does not."</li>
+            <li><strong>Beat 3 (45s) Fit (History):</strong> <em>"what size should I get?"</em> &rarr; Size M at 99% confidence.</li>
+            <li><strong>Beat 4 (45s) Fit (Abstain):</strong> Aditi asks same &rarr; No history &rarr; <strong>AGENT ABSTAINS</strong>.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title gold">Part 2: Governance & Platform</div>
+          <ul class="bullet-list">
+            <li><strong>Beat 5 (60s) Upsell:</strong> Meera (3rd session) &rarr; Plus offer (£4.99/mo). Reply: <em>"accept"</em>.</li>
+            <li><strong>Beat 6 (45s) Loyalty Handoff:</strong> <em>"how many points?"</em> &rarr; Reads entitlement &rarr; 2x multiplier!</li>
+            <li><strong>Beat 7 (45s) Guardrail Block:</strong> <code>unsafeRanking=true</code> &rarr; Fairness guardrail BLOCKS!</li>
+            <li><strong>Beat 8 (60s) MCP Hot-Load:</strong> Denied permission + install trending tool (22 &rarr; 23 tools live).</li>
+            <li><strong>Beat 9-10 (60s) Interop:</strong> Switch LLM provider live &rarr; <code>curl /outcome</code> (34% &rarr; 20.4%).</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 13 -->
+    <div class="slide" data-notes="Keep these three answers in mind during Q&A. They address security, ethics, and reliability head-on.">
+      <div class="category-tag">Judge Defense Cheat Sheet</div>
+      <div class="slide-title">Anticipated Technical Questions & Winning Answers</div>
+      <div class="slide-sub">Pre-empting tough questions with platform evidence and architectural proofs.</div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px; flex: 1;">
+        <div class="card">
+          <div class="card-title rose">Q1: "Can an agent perform SQL injection or dump customer data?"</div>
+          <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+            <strong>Answer: Platform capability denial.</strong> Look at <code>wrangler.jsonc</code>—3 of the 4 Workers have NO D1 binding. The agent runtime does not possess a database handle. Platform security beats prompt instructions.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title cyan">Q2: "Does affluence ranking discriminate against lower-income shoppers?"</div>
+          <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+            <strong>Answer: "Ranking differs, access does not."</strong> Our fairness guardrail mathematically guarantees identical candidate pool eligibility and enforces multi-tier diversity. Any exclusion triggers an automatic fallback to neutral ranking.
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title emerald">Q3: "What happens if OpenAI or Anthropic goes down during shopping?"</div>
+          <div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+            <strong>Answer: Graceful edge degradation.</strong> The LLM Gateway catches upstream timeouts, falls back to deterministic mock output with <code>degraded: true</code>, and never breaks the customer shopping session.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 14 -->
+    <div class="slide" data-notes="Thank you. Neu.Tail proves that multi-agent systems in retail can be secure, fair, explainable, and profitable. We are ready for questions.">
+      <div class="category-tag">Executive Summary</div>
+      <div class="slide-title">Why Neu.Tail Sets the Standard for Agentic Retail</div>
+      <div class="slide-sub">A complete, working, edge-native personalization assistant grounded in real unit economics.</div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title cyan">1. Real Engineering</div>
+          <ul class="bullet-list">
+            <li>4 Isolated Cloudflare Workers</li>
+            <li>Platform zero-trust data model</li>
+            <li>Durable Objects for session turns</li>
+            <li>KV runtime MCP tool contracts</li>
+            <li>AI Gateway caching & rate-limiting</li>
+            <li>Braintrust automated prompt evals</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title gold">2. Ethical & Governed</div>
+          <ul class="bullet-list">
+            <li>Inline PII Minimisation</li>
+            <li>Biometric sizing consent gate</li>
+            <li>Mathematical fairness guardrails</li>
+            <li>Single-tier exclusion prevention</li>
+            <li>70% confidence abstain rule</li>
+            <li>Append-only Analytics Engine audit</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title emerald">3. Commercial Impact</div>
+          <ul class="bullet-list">
+            <li>34.0% &rarr; 20.4% return reduction</li>
+            <li>13.6 percentage points removed</li>
+            <li>Value-timed upsell (£4.99/mo)</li>
+            <li>2x loyalty accrual cross-agent loop</li>
+            <li>Honest retail economic breakdown</li>
+            <li>Production-ready on Cloudflare</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Speaker Notes Drawer -->
+    <div id="notes-drawer">
+      <div style="font-weight: 700; color: var(--accent-gold); margin-bottom: 4px; font-size: 11px; text-transform: uppercase;">Speaker Note</div>
+      <div id="notes-content"></div>
+    </div>
+  </div>
+
+  <!-- Navigation Bar -->
+  <div id="nav-bar">
+    <button class="nav-btn" onclick="prevSlide()">&larr; Prev</button>
+    <span id="slide-num" style="font-weight: 700; color: var(--text-white);">1 / 14</span>
+    <button class="nav-btn" onclick="nextSlide()">Next &rarr;</button>
+    <button class="nav-btn" onclick="toggleNotes()">Speaker Notes [N]</button>
+    <button class="nav-btn" onclick="toggleFullscreen()">Fullscreen [F]</button>
+  </div>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    const slideNum = document.getElementById('slide-num');
+    const progressBar = document.getElementById('progress');
+    const notesDrawer = document.getElementById('notes-drawer');
+    const notesContent = document.getElementById('notes-content');
+    let current = 0;
+
+    function showSlide(index) {
+      slides[current].classList.remove('active');
+      current = (index + slides.length) % slides.length;
+      slides[current].classList.add('active');
+      slideNum.textContent = `${current + 1} / ${slides.length}`;
+      progressBar.style.width = `${((current + 1) / slides.length) * 100}%`;
+      notesContent.textContent = slides[current].getAttribute('data-notes') || 'No notes for this slide.';
+    }
+
+    function nextSlide() { showSlide(current + 1); }
+    function prevSlide() { showSlide(current - 1); }
+    function toggleNotes() { notesDrawer.classList.toggle('open'); }
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.getElementById('stage').requestFullscreen().catch(err => alert(err.message));
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') { nextSlide(); }
+      else if (e.key === 'ArrowLeft') { prevSlide(); }
+      else if (e.key.toLowerCase() === 'n') { toggleNotes(); }
+      else if (e.key.toLowerCase() === 'f') { toggleFullscreen(); }
+    });
+
+    showSlide(0);
+  </script>
+</body>
+</html>

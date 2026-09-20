@@ -8,8 +8,8 @@
 const est = (s: string) => Math.ceil(s.length / 4);
 
 const INTENT_RULES: Array<[RegExp, string]> = [
+  [/\b(points?|reward|redeem|tier|gold|silver|badge|badges|referral|loyalty|quest|quests|mission|missions|challenge|challenges|streak)\b/i, 'loyalty.event'],
   [/\b(size|fit|sizing|measure|measurement|true to size|will (this|it) fit|what size)\b/i, 'fit.check'],
-  [/\b(points?|reward|redeem|tier|gold|silver|badge|referral|loyalty)\b/i, 'loyalty.event'],
   [/\b(upgrade|subscription|subscribe|plus|premium plan|plan|styling advisory|stylist)\b/i, 'upsell.moment'],
   [/\b(who am i|my (account|profile|segment)|log ?in|sign ?in|my details)\b/i, 'profile.refresh'],
   [/\b(show|find|looking for|need|want|search|browse|recommend|suggest|dress|coat|jumper|trousers|shirt|skirt|shoes)\b/i, 'discovery.rank'],
@@ -93,6 +93,12 @@ export function mockComplete(promptId: string, vars: Record<string, any>, system
       break;
     case 'loyalty.nudge':
       text = `${vars.awarded} points added at ${vars.multiplier}x on your ${vars.entitlement} entitlement, taking you to ${vars.balance} and leaving ${vars.to_next} to the next tier.`;
+      break;
+    case 'loyalty.quest.generate':
+      text = `Here are your active style quests for ${vars.tier} tier: ${vars.quests_summary}. Complete them to unlock bonus NeuPoints and special badges.`;
+      break;
+    case 'loyalty.streak.celebrate':
+      text = `You are maintaining a ${vars.streak}-order Zero-Return Fit Streak with a ${vars.multiplier}x accrual multiplier, preventing an estimated GBP ${vars.saved_gbp} in return logistics and ${vars.saved_co2} kg CO2. Next milestone: ${vars.next_milestone}.`;
       break;
     default:
       text = `[mock] no canned response registered for prompt '${promptId}'.`;

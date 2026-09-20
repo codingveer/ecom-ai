@@ -14,7 +14,12 @@
   },
   "output_schema": {
     "tier": "string",
-    "points_balance": "integer"
+    "points_balance": "integer",
+    "points_to_next_tier": "integer",
+    "fit_streak": "integer",
+    "fit_streak_multiplier": "number",
+    "badges": "array",
+    "quests": "array"
   },
   "transport": {
     "service": "services",

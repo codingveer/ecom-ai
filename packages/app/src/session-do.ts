@@ -256,7 +256,10 @@ export class SessionAgent extends AIChatAgent<Env> {
         agentName = 'loyalty';
         const lk = mk('loyalty');
         const redeemMatch = text.match(/redeem\s+(-?\d+)/i);
-        const statusQuery = /\bhow (many|much)\b/i.test(text) || /\bbalance\b/i.test(text);
+        const questQuery = /\b(quest|quests|challenge|challenges|mission|missions)\b/i.test(text);
+        const streakQuery = /\b(streak|fit streak|keep streak|badge|badges|eco)\b/i.test(text);
+        const statusQuery = /\bhow (many|much)\b/i.test(text) || /\bbalance\b/i.test(text) || /\bpoints\b/i.test(text);
+
         if (redeemMatch) {
           const amount = Number(redeemMatch[1]);
           if (amount <= 0) {
@@ -269,13 +272,27 @@ export class SessionAgent extends AIChatAgent<Env> {
               ? `Redeemed ${amount} points. Balance is now ${r.balance}, and GBP ${r.liability_released_gbp} of point liability has been released.`
               : `That reward needs ${r.shortfall} more points. Your balance is ${r.balance}.`;
           }
+        } else if (questQuery) {
+          trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent - style quests query', m3_ref: 'S5.10' });
+          const q = await loyalty.getQuests(lk, customerId, segment?.affluence || 'Member', segment?.tier || 'Silver');
+          payload = q;
+          const questsList = (q.formatted_quests || []).map((quest: any) =>
+            `• [${quest.progress}/${quest.target}] **${quest.title}**: ${quest.desc} (+${quest.reward_points} pts${quest.badge ? `, Badge: ${quest.badge}` : ''})`
+          ).join('\n');
+          reply = `${q.summary}\n\n**Active Missions:**\n${questsList || 'No active quests currently.'}`;
+        } else if (streakQuery) {
+          trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent - fit streak query', m3_ref: 'S5.12' });
+          const s = await loyalty.getStreak(lk, customerId, segment?.affluence || 'Member');
+          payload = s;
+          const badgesList = (s.badges || []).length ? `\n\n**Badges Earned:** ${s.badges.join(' · ')}` : '';
+          reply = `${s.celebration}${badgesList}\n\n• **Zero-Return Streak:** ${s.fit_streak} consecutive kept orders\n• **Active Fit Multiplier:** ${s.fit_streak_multiplier}×\n• **Reverse Logistics Cost Saved:** ~GBP ${s.estimated_reverse_logistics_saved_gbp}\n• **Carbon Impact Avoided:** ${s.estimated_co2_kg_saved} kg CO2`;
         } else if (statusQuery) {
           trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent - balance query', m3_ref: 'S5.3' });
           const st = await loyalty.status(lk, customerId);
           payload = st;
           reply = /\bmore\b/i.test(text)
-            ? `You need ${st.points_to_next_tier} more points to reach the next tier. Current balance is ${st.points_balance} points on ${st.tier}.`
-            : `Your balance is ${st.points_balance} points on ${st.tier} tier, with ${st.points_to_next_tier} to the next tier.`;
+            ? `You need ${st.points_to_next_tier} more points to reach the next tier. Current balance is ${st.points_balance} points on ${st.tier} tier (${st.multiplier}× combined accrual multiplier: ${st.subscription_multiplier}× plan, ${st.fit_streak_multiplier}× fit streak).`
+            : `Your balance is ${st.points_balance} points on ${st.tier} tier with a ${st.multiplier}× accrual rate (${st.subscription_multiplier}× plan entitlement, ${st.fit_streak_multiplier}× fit streak), with ${st.points_to_next_tier} points to the next tier.`;
         } else {
           trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent', m3_ref: 'S5.3' });
           const r = await loyalty.accrue(lk, customerId, 'purchase', Math.round(Number(segment.evidence.avg_unit_price_gbp) || 40));

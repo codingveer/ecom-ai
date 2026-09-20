@@ -14,6 +14,8 @@ const SUGGESTIONS = [
   'what size should I get?',
   'tell me about the styling advisory plan',
   'how many points did I earn?',
+  'what are my style quests?',
+  'check my fit streak',
 ];
 
 const SESSION_STORAGE_KEY = 'neutail-console-session';

@@ -7331,12 +7331,13 @@ INSERT INTO size_charts (category,size,weight_kg_avg,weight_kg_stdev,height_cm_a
 ('accessories','M',58.21,4.22,165.5,6.29),
 ('accessories','L',62.25,4.61,166.95,6.51),
 ('accessories','XL',71.03,9.96,167.75,6.81);
+INSERT INTO loyalty_accounts (customer_id,tier,points_balance,lifetime_points,engagement_score,points_to_next_tier,fit_streak,fit_streak_multiplier,badges,quests) VALUES
+('C001','Gold',2240,6400,0.84,2600,5,2.0,'["Fit Master","Zero-Return Champion","Capsule Pioneer"]','[{"id":"q_c001_1","title":"Capsule Evening Look","desc":"Pair your tailored blazer with a mulberry silk midi dress","category":"dresses","progress":0,"target":1,"reward_points":350,"badge":"Silk Connoisseur","status":"active"},{"id":"q_c001_2","title":"Fit Confidence Streak","desc":"Complete 1 more high-confidence fit order without returns","progress":5,"target":6,"reward_points":250,"badge":"Sustainable Icon","status":"active"}]'),
+('C002','Bronze',74,210,0.21,4290,0,1.0,'["First Step"]','[{"id":"q_c002_1","title":"Unlock Precision Fit","desc":"Consult the Size & Fit agent on any dress to guarantee 0 size returns","progress":0,"target":1,"reward_points":200,"badge":"Fit Explorer","status":"active"},{"id":"q_c002_2","title":"Smart Value Wardrobe","desc":"Find 1 core everyday essential under £40","progress":0,"target":1,"reward_points":150,"badge":"Smart Shopper","status":"active"}]'),
+('C003','Silver',735,2100,0.58,2400,3,1.5,'["Fit Enthusiast","Style Seeker"]','[{"id":"q_c003_1","title":"Styling Advisory Ascent","desc":"Elevate your styling membership to unlock unlimited concierge consultations and 2× loyalty","progress":0,"target":1,"reward_points":300,"badge":"Atelier Insider","status":"active"},{"id":"q_c003_2","title":"Autumn Knitwear Match","desc":"Add a verified fit cardigan or jumper to your collection","progress":0,"target":1,"reward_points":200,"badge":"Cozy Curator","status":"active"}]'),
+('C004','Silver',735,2100,0.58,2400,4,1.5,'["Sartorial Precision","Fit Champion"]','[{"id":"q_c004_1","title":"Classic Tailoring Capsule","desc":"Explore menswear trousers or jackets in your true-to-size cut","progress":0,"target":1,"reward_points":300,"badge":"Tailored Gent","status":"active"},{"id":"q_c004_2","title":"Zero-Return Milestone","desc":"Keep your 5th consecutive order to achieve 2× streak multiplier","progress":4,"target":5,"reward_points":400,"badge":"Zero-Return Legend","status":"active"}]'),
+('C000','Bronze',74,210,0.21,4290,0,1.0,'["Atelier Guest"]','[{"id":"q_c000_1","title":"Welcome Quest","desc":"Sign in and explore your personal style profile","progress":0,"target":1,"reward_points":100,"badge":"Welcome Member","status":"active"}]');
 INSERT INTO loyalty_accounts (customer_id,tier,points_balance,lifetime_points,engagement_score,points_to_next_tier) VALUES
-('C001','Gold',2240,6400,0.84,2600),
-('C002','Bronze',74,210,0.21,4290),
-('C003','Silver',735,2100,0.58,2400),
-('C004','Silver',735,2100,0.58,2400),
-('C000','Bronze',74,210,0.21,4290),
 ('C005','Gold',2351,7836,0.77,1164),
 ('C006','Silver',1126,3752,0.51,748),
 ('C007','Bronze',183,610,0.69,3890),
