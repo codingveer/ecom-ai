@@ -611,7 +611,8 @@ export const BUNDLED: ToolContract[] = [
     "purpose": "Read points balance, tier and engagement score.",
     "allowed_agents": [
       "loyalty",
-      "upsell"
+      "upsell",
+      "orchestrator"
     ],
     "input_schema": {
       "customer_id": {

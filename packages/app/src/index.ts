@@ -279,6 +279,54 @@ app.get('/api/customers/:id/orders', async c => {
   } catch (e) { return c.json({ error: String(e) }, 502); }
 });
 
+app.get('/api/loyalty/:id', async c => {
+  const k = new Kernel('loyalty', new Trace(), c.env);
+  try {
+    const result = await k.invoke('loyalty.account.get', { customer_id: c.req.param('id') });
+    return c.json(result);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    const status = msg.includes('404') || msg.includes('not_found') ? 404 : 502;
+    return c.json({ error: msg }, status);
+  }
+});
+
+app.get('/loyalty/:id', async c => {
+  const k = new Kernel('loyalty', new Trace(), c.env);
+  try {
+    const result = await k.invoke('loyalty.account.get', { customer_id: c.req.param('id') });
+    return c.json(result);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    const status = msg.includes('404') || msg.includes('not_found') ? 404 : 502;
+    return c.json({ error: msg }, status);
+  }
+});
+
+app.get('/api/loyalty/:id/quests', async c => {
+  const k = new Kernel('loyalty', new Trace(), c.env);
+  try {
+    const result = await k.invoke('loyalty.quests.get', { customer_id: c.req.param('id') });
+    return c.json(result);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    const status = msg.includes('404') || msg.includes('not_found') ? 404 : 502;
+    return c.json({ error: msg }, status);
+  }
+});
+
+app.get('/api/loyalty/:id/streak', async c => {
+  const k = new Kernel('loyalty', new Trace(), c.env);
+  try {
+    const result = await k.invoke('loyalty.streak.get', { customer_id: c.req.param('id') });
+    return c.json(result);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    const status = msg.includes('404') || msg.includes('not_found') ? 404 : 502;
+    return c.json({ error: msg }, status);
+  }
+});
+
 app.get('/api/tools', async c => {
   try {
     const qs = c.req.url.includes('?') ? '?' + c.req.url.split('?')[1] : '';

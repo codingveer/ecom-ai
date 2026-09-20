@@ -2450,6 +2450,10 @@ function switchTo(id){
   if (currentView === 'shop') {
     loadRecommendations(true);
     runSearch();
+  } else if (currentView === 'account') {
+    renderAccountView();
+  } else if (currentView === 'cart') {
+    renderCartView();
   }
 }
 
@@ -3881,7 +3885,17 @@ async function renderAccountView(){
   // Loyalty & Gamification Loader
   async function loadGamifiedLoyalty() {
     try {
-      const res = await fetch(`/loyalty/${customerId}`);
+      const res = await fetch(`/api/loyalty/${customerId}`);
+      if (!res.ok) {
+        console.warn('Loyalty fetch failed:', res.status);
+        $('acctPointsDisplay').textContent = '-- NeuPoints';
+        $('acctRateBreakdown').textContent = 'Unable to load accrual rate.';
+        $('acctStreakCount').textContent = '0-Order Streak';
+        $('acctStreakBenefit').textContent = 'Fit streak metrics unavailable.';
+        $('acctBadgesList').innerHTML = '<span style="font-size:12px;color:var(--mute);">Badges unavailable.</span>';
+        $('acctQuestsContainer').innerHTML = '<div style="font-size:12px;color:var(--mute);">Missions unavailable.</div>';
+        return;
+      }
       const data = await res.json();
       if (!data.error) {
         currentPointsBalance = data.points_balance;
@@ -3935,7 +3949,9 @@ async function renderAccountView(){
           }).join('');
         }
       }
-    } catch {}
+    } catch (err) {
+      console.error('loadGamifiedLoyalty error:', err);
+    }
   }
   loadGamifiedLoyalty();
 
