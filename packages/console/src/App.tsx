@@ -109,6 +109,39 @@ function creditsOf(message: ChatMessage): Credits | undefined {
   return part && 'data' in part ? (part.data as Credits) : undefined;
 }
 
+function formatConsoleMessage(raw: string) {
+  const lines = raw.split('\n');
+  return lines.map((line, idx) => {
+    if (!line.trim()) {
+      return <div key={idx} style={{ height: '8px' }} />;
+    }
+    const parts = line.split(/(\*\*[^*]+\*\*|_[^_]+_)/g);
+    const renderedParts = parts.map((part, pIdx) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={pIdx} style={{ color: 'var(--ink)' }}>{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith('_') && part.endsWith('_')) {
+        return <em key={pIdx} style={{ color: 'var(--mute)' }}>{part.slice(1, -1)}</em>;
+      }
+      return part;
+    });
+
+    const isBullet = line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*');
+    return (
+      <div
+        key={idx}
+        style={{
+          paddingLeft: isBullet ? '12px' : '0',
+          marginBottom: isBullet ? '4px' : '2px',
+          lineHeight: '1.5',
+        }}
+      >
+        {renderedParts}
+      </div>
+    );
+  });
+}
+
 /**
  * Everything that talks to a single SessionAgent instance. Mounted with
  * `key={sessionId}` by `App` below, so switching customers - which always
@@ -289,7 +322,7 @@ function ChatSession({ customerId, sessionId }: { customerId: string; sessionId:
             return (
               <div key={m.id} className={'msg ' + (m.role === 'user' ? 'you' : 'bot')}>
                 <div className="who">{m.role === 'user' ? `You · ${customerId}` : `Assistant · ${tr?.agent ?? ''} agent`}</div>
-                <div className="bubble">{text}</div>
+                <div className="bubble">{formatConsoleMessage(text)}</div>
               </div>
             );
           })}

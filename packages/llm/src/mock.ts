@@ -95,10 +95,10 @@ export function mockComplete(promptId: string, vars: Record<string, any>, system
       text = `${vars.awarded} points added at ${vars.multiplier}x on your ${vars.entitlement} entitlement, taking you to ${vars.balance} and leaving ${vars.to_next} to the next tier.`;
       break;
     case 'loyalty.quest.generate':
-      text = `Here are your active style quests for ${vars.tier} tier: ${vars.quests_summary}. Complete them to unlock bonus NeuPoints and special badges.`;
+      text = `Complete your personalized wardrobe missions to advance your tier and unlock exclusive styling entitlements.`;
       break;
     case 'loyalty.streak.celebrate':
-      text = `You are maintaining a ${vars.streak}-order Zero-Return Fit Streak with a ${vars.multiplier}x accrual multiplier, preventing an estimated GBP ${vars.saved_gbp} in return logistics and ${vars.saved_co2} kg CO2. Next milestone: ${vars.next_milestone}.`;
+      text = `Flawless curation! Keeping orders with verified sizing eliminates return transit and logistics waste while boosting your reward multiplier.`;
       break;
     default:
       text = `[mock] no canned response registered for prompt '${promptId}'.`;

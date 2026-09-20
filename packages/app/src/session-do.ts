@@ -276,23 +276,37 @@ export class SessionAgent extends AIChatAgent<Env> {
           trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent - style quests query', m3_ref: 'S5.10' });
           const q = await loyalty.getQuests(lk, customerId, segment?.affluence || 'Member', segment?.tier || 'Silver');
           payload = q;
-          const questsList = (q.formatted_quests || []).map((quest: any) =>
-            `• [${quest.progress}/${quest.target}] **${quest.title}**: ${quest.desc} (+${quest.reward_points} pts${quest.badge ? `, Badge: ${quest.badge}` : ''})`
-          ).join('\n');
-          reply = `${q.summary}\n\n**Active Missions:**\n${questsList || 'No active quests currently.'}`;
+          const questsList = (q.formatted_quests || []).map((quest: any) => {
+            const isDone = quest.status === 'completed' || quest.status === 'claimed';
+            const icon = isDone ? '✓' : '✦';
+            return `• ${icon} **${quest.title}** (${quest.progress}/${quest.target})\n  ${quest.desc}\n  *Reward:* +${quest.reward_points} NeuPoints${quest.badge ? ` · Badge: 🏆 ${quest.badge}` : ''}`;
+          }).join('\n\n');
+          const badgesList = (q.badges || []).length ? `\n\n🏆 **Badges Unlocked:** ${q.badges.join(' · ')}` : '';
+          reply = `✦ **Active AI Style Quests** (${q.tier || 'Member'} Tier)\n\n`
+            + (questsList || '• No active quests currently available.')
+            + badgesList
+            + (q.summary ? `\n\n_${q.summary}_` : '');
         } else if (streakQuery) {
           trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent - fit streak query', m3_ref: 'S5.12' });
           const s = await loyalty.getStreak(lk, customerId, segment?.affluence || 'Member');
           payload = s;
-          const badgesList = (s.badges || []).length ? `\n\n**Badges Earned:** ${s.badges.join(' · ')}` : '';
-          reply = `${s.celebration}${badgesList}\n\n• **Zero-Return Streak:** ${s.fit_streak} consecutive kept orders\n• **Active Fit Multiplier:** ${s.fit_streak_multiplier}×\n• **Reverse Logistics Cost Saved:** ~GBP ${s.estimated_reverse_logistics_saved_gbp}\n• **Carbon Impact Avoided:** ${s.estimated_co2_kg_saved} kg CO2`;
+          const badgesList = (s.badges || []).length ? `\n\n🏆 **Badges Earned:** ${s.badges.join(' · ')}` : '';
+          const nextTarget = s.next_milestone
+            ? `\n• **Next Milestone:** ${s.next_milestone.target} orders for ${s.next_milestone.multiplier}× multiplier (${s.next_milestone.badge})`
+            : '';
+          reply = `🔥 **Zero-Return Fit Streak: ${s.fit_streak} Kept Orders** (${s.fit_streak_multiplier}× Accrual Multiplier)\n\n`
+            + `• **Reverse Logistics Cost Saved:** ~£${Number(s.estimated_reverse_logistics_saved_gbp).toFixed(2)}\n`
+            + `• **Carbon Emissions Avoided:** ${Number(s.estimated_co2_kg_saved).toFixed(1)} kg CO₂`
+            + nextTarget
+            + badgesList
+            + (s.celebration ? `\n\n_${s.celebration}_` : '');
         } else if (statusQuery) {
           trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent - balance query', m3_ref: 'S5.3' });
           const st = await loyalty.status(lk, customerId);
           payload = st;
-          reply = /\bmore\b/i.test(text)
-            ? `You need ${st.points_to_next_tier} more points to reach the next tier. Current balance is ${st.points_balance} points on ${st.tier} tier (${st.multiplier}× combined accrual multiplier: ${st.subscription_multiplier}× plan, ${st.fit_streak_multiplier}× fit streak).`
-            : `Your balance is ${st.points_balance} points on ${st.tier} tier with a ${st.multiplier}× accrual rate (${st.subscription_multiplier}× plan entitlement, ${st.fit_streak_multiplier}× fit streak), with ${st.points_to_next_tier} points to the next tier.`;
+          reply = `✨ **NeuPoints Balance: ${st.points_balance} points** (${st.tier} Tier)\n\n`
+            + `• **Active Accrual Multiplier:** ${st.multiplier}× combined rate (${st.subscription_multiplier}× plan entitlement, ${st.fit_streak_multiplier}× fit streak)\n`
+            + `• **Points to Next Tier:** ${st.points_to_next_tier > 0 ? `${st.points_to_next_tier} points to next milestone` : 'Top tier achieved'}`;
         } else {
           trace.add({ stage: 'route', actor: 'orchestrator', label: 'dispatch Loyalty Agent', m3_ref: 'S5.3' });
           const r = await loyalty.accrue(lk, customerId, 'purchase', Math.round(Number(segment.evidence.avg_unit_price_gbp) || 40));
